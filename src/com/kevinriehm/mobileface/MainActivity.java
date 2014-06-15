@@ -376,7 +376,13 @@ Log.i(TAG,uri.toString());
 		builder.setOAuthConsumerSecret(TWITTER_SECRET);
 		twitter = new TwitterFactory(builder.build()).getInstance();
 
-		new VerifyTwitterCredentialsTask().execute(uri);
+		try {
+			// Use get() to ensure the task is complete
+			new VerifyTwitterCredentialsTask().execute(uri).get();
+		} catch(Exception e) {
+			Log.e(TAG,e.toString());
+			e.printStackTrace();
+		}
 	}
 
 	private MatOfRect findFaces(Mat image) {
