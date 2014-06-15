@@ -15,6 +15,9 @@ import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.location.Criteria;
+import android.location.Location;
+import android.location.LocationManager;
 import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Bundle;
@@ -45,6 +48,7 @@ import org.opencv.core.RotatedRect;
 import org.opencv.core.Scalar;
 import org.opencv.core.Size;
 import org.opencv.highgui.Highgui;
+import org.opencv.imgproc.Imgproc;
 import org.opencv.objdetect.CascadeClassifier;
 
 public class MainActivity extends Activity implements CvCameraViewListener2 {
@@ -54,8 +58,6 @@ public class MainActivity extends Activity implements CvCameraViewListener2 {
 
 	private static final String TWITTER_KEY = "DyrwKl9MGt0MmjRAVlKbqL7XB";
 	private static final String TWITTER_SECRET = "w6MiNQ3ONhFPK0JJiKD9IkWADfmKjXyhEde2vxk2SHrYX4k8wz";
-
-	private static final String TWITTER_CALLBACK_URL = "oauth://mobileface.kevinriehm.com";
 
 	private static final String PREF_TWITTER_TOKEN = "twitter_token";
 	private static final String PREF_TWITTER_SECRET = "twitter_secret";
@@ -76,20 +78,6 @@ public class MainActivity extends Activity implements CvCameraViewListener2 {
 
 	private String twitterToken = null;
 	private String twitterSecret = null;
-
-	private BaseLoaderCallback opencvLoaderCallback = new BaseLoaderCallback(this) {
-		public void onManagerConnected(int status) {
-			if(status == LoaderCallbackInterface.SUCCESS) {
-				// Set up the face detector
-				faceDetector = new CascadeClassifier(faceFilePath);
-
-				// Activate the camera processing
-				cameraView.enableView();
-			} else super.onManagerConnected(status);
-		}
-	};
-
-	// Activity overrides
 
 	public void onCreate(Bundle savedInstanceState) {
 		super.onCreate(savedInstanceState);
@@ -150,7 +138,20 @@ public class MainActivity extends Activity implements CvCameraViewListener2 {
 		// Make sure we have access to Twitter
 		checkTwitterCredentials();
 
-		OpenCVLoader.initAsync(OpenCVLoader.OPENCV_VERSION_2_4_9,this,opencvLoaderCallback);
+		OpenCVLoader.initAsync(OpenCVLoader.OPENCV_VERSION_2_4_9,this,new BaseLoaderCallback(this) {
+			public void onManagerConnected(int status) {
+				if(status == LoaderCallbackInterface.SUCCESS) {
+					// Set up the face detector
+					faceDetector = new CascadeClassifier(faceFilePath);
+
+					// Activate the camera processing
+					cameraView.enableView();
+				} else super.onManagerConnected(status);
+			}
+		});
+
+	// Activity overrides
+
 	}
 
 	public void onDestroy() {
@@ -216,62 +217,51 @@ public class MainActivity extends Activity implements CvCameraViewListener2 {
 		}
 
 		// Crop it out and save it to a file
-		Mat faceMat = new Mat(currentFrameRgba,currentFrameFaces.toArray()[0]);
-
-		File faceFile = null;
+		Mat faceMatBGR = null;
+		Mat faceMatRGB = null;
 		try {
-//			faceFile = File.createTempFile("selfie",".jpg",getDir("temp",Context.MODE_PRIVATE));
-
-//			Highgui.imwrite(faceFile.getAbsolutePath(),faceMat);
-
-			// Send it on its merry way
-		//	new UploadAndTweetTask().execute(faceFile);
+			Log.i(TAG,currentFrameFaces.toArray()[0].toString());
+			faceMatBGR = new Mat();
+			faceMatRGB = new Mat(currentFrameRgba,currentFrameFaces.toArray()[0]);
+			Imgproc.cvtColor(faceMatRGB,faceMatBGR,Imgproc.COLOR_RGB2BGR);
 		} catch(Exception e) {
 			Log.e(TAG,e.toString());
 			e.printStackTrace();
-		} finally {
-			if(faceFile != null) faceFile.delete();
 		}
 
-		faceMat.release();
+		File faceFile = null;
+		try {
+			// Get our location
+			Criteria criteria = new Criteria();
+			criteria.setAccuracy(Criteria.ACCURACY_FINE);
+
+			LocationManager locationmanager = (LocationManager) getSystemService(LOCATION_SERVICE);
+			String provider = locationmanager.getBestProvider(criteria,true);
+			Location location = provider == null ? null : locationmanager.getLastKnownLocation(provider);
+
+			// Record the date and time
+			SimpleDateFormat format = new SimpleDateFormat("cccc MMMM d, y 'at' h:mm a");
+
+			// Build the tweet text
+			String tweet = "My face on " + format.format(new Date()) + ".";
+
+			// Save the tweet image
+			faceFile = File.createTempFile("selfie",".jpg",getDir("temp",Context.MODE_PRIVATE));
+
+			Highgui.imwrite(faceFile.getAbsolutePath(),faceMatBGR);
+
+			// Send it on its merry way
+			new TweetFaceDialog(this,twitter,tweet,faceFile,location).show();
+		} catch(Exception e) {
+			Log.e(TAG,e.toString());
+			e.printStackTrace();
+		}
+
+		faceMatBGR.release();
+		faceMatRGB.release();
 	}
 
 	// Helper classes/functions
-
-	private class UploadAndTweetTask extends AsyncTask<File, Void, Void> {
-		ProgressDialog dialog;
-
-		protected void onPreExecute() {
-			dialog = ProgressDialog.show(MainActivity.this,getString(R.string.uploading_title),getString(R.string.uploading_message),true,false);
-		}
-
-		protected Void doInBackground(File... files) {
-			// Assume there is exactly one file to upload
-			File file = files[0];
-
-//			HttpsURLConnection conn = (HttpsURLConnection) url.openConnection();
-//			try {
-//			} finally {
-//				url.closeConnection();
-//			}
-
-			return null;
-		}
-
-		protected void onPostExecute(Void result) {
-			// Build the tweet text
-			String tweet = "Check out my selfie!";
-
-			// Broadcast our intent to tweet this
-//			Intent tweetIntent = new Intent(Intent.ACTION_VIEW);
-//			tweetIntent.setData(Uri.parse(requestToken.getAuthorizationURL()));
-//Uri.parse("https://twitter.com/intent/tweet?text=" + URLEncoder.encode(tweet)
-//			+ "&url=" + imageUrl));
-//			startActivity(tweetIntent);
-
-			dialog.dismiss();
-		}
-	}
 
 	private class GetTwitterCredentialsTask extends AsyncTask<Void, Void, Void> {
 		ProgressDialog dialog;
@@ -284,7 +274,7 @@ public class MainActivity extends Activity implements CvCameraViewListener2 {
 
 		protected Void doInBackground(Void... args) {
 			try {
-				requestToken = twitter.getOAuthRequestToken(TWITTER_CALLBACK_URL);
+				requestToken = twitter.getOAuthRequestToken(getResources().getString(R.string.twitter_callback_url));
 
 				Intent intent = new Intent(MainActivity.this,TwitterAuthActivity.class);
 				intent.setData(Uri.parse(requestToken.getAuthenticationURL()));
@@ -372,12 +362,8 @@ public class MainActivity extends Activity implements CvCameraViewListener2 {
 		return true;
 	}
 
-	// Check whether we are getting back with Twitter credentials
+	// Process the Twitter crendentials we are getting back
 	private void receiveTwitterCredentials(Uri uri) {
-		// Ignore all other intents
-		if(uri == null || !uri.toString().startsWith(TWITTER_CALLBACK_URL))
-			return;
-Log.i(TAG,uri.toString());
 		// Build a configuration with generic credentials
 		ConfigurationBuilder builder = new ConfigurationBuilder();
 		builder.setOAuthConsumerKey(TWITTER_KEY);
@@ -385,7 +371,7 @@ Log.i(TAG,uri.toString());
 		twitter = new TwitterFactory(builder.build()).getInstance();
 
 		try {
-			// Use get() to ensure the task is complete
+			// Use get() to complete the task synchronously
 			new VerifyTwitterCredentialsTask().execute(uri).get();
 		} catch(Exception e) {
 			Log.e(TAG,e.toString());

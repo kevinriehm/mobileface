@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-	<string name="app_name">Mobile Face</string>
+	<string name="app_name">Tweet A Face</string>
 
 	<string name="twitter_callback_url">oauth://mobileface.kevinriehm.com</string>
 
@@ -10,4 +10,9 @@
 
 	<string name="uploading_title">Please Wait</string>
 	<string name="uploading_message">Uploading image...</string>
+
+	<string name="tweet_preview_title">Tweet A Face</string>
+	<string name="tweet_preview_positive">Tweet</string>
+	<string name="tweet_preview_negative">Cancel</string>
 </resources>
+
