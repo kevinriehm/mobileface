@@ -25,5 +25,13 @@
 				<data android:scheme="oauth" android:host="mobileface.kevinriehm.com" />
 			</intent-filter>
 		</activity>
+
+		<activity
+			android:name="TwitterAuthActivity"
+			android:label="@string/app_name">
+			<intent-filter>
+				<action android:name="android.intent.action.VIEW" />
+			</intent-filter>
+		</activity>
 	</application>
 </manifest>

@@ -2,6 +2,8 @@
 <resources>
 	<string name="app_name">Mobile Face</string>
 
+	<string name="twitter_callback_url">oauth://mobileface.kevinriehm.com</string>
+
 	<string name="no_faces_title">Can\'t find a face!</string>
 	<string name="no_faces_message">Please look directly at the camera, and make sure your face is circled in red.</string>
 	<string name="no_faces_button">OK</string>

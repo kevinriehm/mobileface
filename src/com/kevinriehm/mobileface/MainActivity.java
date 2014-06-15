@@ -50,6 +50,8 @@ import org.opencv.objdetect.CascadeClassifier;
 public class MainActivity extends Activity implements CvCameraViewListener2 {
 	private static final String TAG = "MobileFace-MainActivity";
 
+	private static final int REQUEST_TWITTER_AUTH = 0;
+
 	private static final String TWITTER_KEY = "DyrwKl9MGt0MmjRAVlKbqL7XB";
 	private static final String TWITTER_SECRET = "w6MiNQ3ONhFPK0JJiKD9IkWADfmKjXyhEde2vxk2SHrYX4k8wz";
 
@@ -130,10 +132,16 @@ public class MainActivity extends Activity implements CvCameraViewListener2 {
 		cameraView.disableView();
 	}
 
-	public void onNewIntent(Intent intent) {
-		Log.i(TAG,"new intent: " + intent.toString());
+	public void onActivityResult(int requestCode, int resultCode, Intent data) {
+		Log.i(TAG,"activity result: " + (data == null ? data : data.toString()));
 
-		receiveTwitterCredentials(intent.getData());
+		switch(requestCode) {
+			case REQUEST_TWITTER_AUTH:
+				receiveTwitterCredentials(data.getData());
+				break;
+
+			default: Log.e(TAG,"unhandled requestCode: " + requestCode); break;
+		}
 	}
 
 	public void onResume() {
@@ -278,9 +286,9 @@ public class MainActivity extends Activity implements CvCameraViewListener2 {
 			try {
 				requestToken = twitter.getOAuthRequestToken(TWITTER_CALLBACK_URL);
 
-				Intent intent = new Intent(Intent.ACTION_VIEW,Uri.parse(requestToken.getAuthenticationURL()));
-				intent.putExtra(Browser.EXTRA_APPLICATION_ID,getPackageName());
-				startActivity(intent);
+				Intent intent = new Intent(MainActivity.this,TwitterAuthActivity.class);
+				intent.setData(Uri.parse(requestToken.getAuthenticationURL()));
+				startActivityForResult(intent,REQUEST_TWITTER_AUTH);
 			} catch(Exception e) {
 				Log.e(TAG,e.toString());
 				e.printStackTrace();
@@ -298,7 +306,7 @@ public class MainActivity extends Activity implements CvCameraViewListener2 {
 		ProgressDialog dialog;
 
 		protected void onPreExecute() {
-			Log.i(TAG,"getting Twitter credentials");
+			Log.i(TAG,"verifying Twitter credentials");
 
 			dialog = ProgressDialog.show(MainActivity.this,"Please Wait","",true,false);
 		}
