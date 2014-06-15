@@ -5,8 +5,15 @@
 	android:layout_height="fill_parent"
 	android:keepScreenOn="true">
 	<org.opencv.android.JavaCameraView
+		android:id="@+id/camera_view"
 		android:layout_width="fill_parent"
-		android:layout_height="fill_parent"
-		android:id="@+id/camera_view" />
+		android:layout_height="wrap_content"
+		android:layout_weight="1" />
+
+	<ImageButton
+		android:layout_height="wrap_content"
+		android:layout_width="fill_parent"
+		android:src="@drawable/camera"
+		android:onClick="tweetSelfie" />
 </LinearLayout>
 
