@@ -23,7 +23,13 @@ import android.os.AsyncTask;
 import android.os.Bundle;
 import android.provider.Browser;
 import android.util.Log;
+import android.view.Menu;
+import android.view.MenuItem;
+import android.view.Surface;
 import android.view.View;
+import android.view.WindowManager;
+import android.webkit.CookieSyncManager;
+import android.webkit.CookieManager;
 import android.widget.Toast;
 
 import twitter4j.Twitter;
@@ -114,6 +120,11 @@ public class MainActivity extends Activity implements CvCameraViewListener2 {
 		cameraView.enableFpsMeter();
 	}
 
+	public boolean onCreateOptionsMenu(Menu menu) {
+		getMenuInflater().inflate(R.menu.main,menu);
+		return true;
+	}
+
 	public void onPause() {
 		super.onPause();
 
@@ -149,10 +160,9 @@ public class MainActivity extends Activity implements CvCameraViewListener2 {
 				} else super.onManagerConnected(status);
 			}
 		});
+	}
 
 	// Activity overrides
-
-	}
 
 	public void onDestroy() {
 		super.onDestroy();
@@ -257,8 +267,28 @@ public class MainActivity extends Activity implements CvCameraViewListener2 {
 			e.printStackTrace();
 		}
 
-		faceMatBGR.release();
-		faceMatRGB.release();
+		if(faceMatBGR != null) faceMatBGR.release();
+		if(faceMatRGB != null) faceMatRGB.release();
+	}
+
+	public void deauthenticate(MenuItem item) {
+		// Wipe it all out
+		twitterToken = null;
+		twitterSecret = null;
+
+		SharedPreferences.Editor prefsEditor = getSharedPreferences("",MODE_PRIVATE).edit();
+		prefsEditor.remove(getResources().getString(R.string.pref_twitter_token));
+		prefsEditor.remove(getResources().getString(R.string.pref_twitter_secret));
+		prefsEditor.apply();
+
+		CookieSyncManager.createInstance(this);
+		CookieManager.getInstance().removeAllCookie();
+
+		// Notify the user
+		Toast.makeText(this,R.string.deauthed_message,Toast.LENGTH_SHORT);
+
+		// Get new credentials
+		checkTwitterCredentials();
 	}
 
 	// Helper classes/functions
@@ -274,6 +304,7 @@ public class MainActivity extends Activity implements CvCameraViewListener2 {
 
 		protected Void doInBackground(Void... args) {
 			try {
+				// Actual authentication stuff
 				requestToken = twitter.getOAuthRequestToken(getResources().getString(R.string.twitter_callback_url));
 
 				Intent intent = new Intent(MainActivity.this,TwitterAuthActivity.class);
