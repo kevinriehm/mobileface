@@ -5,10 +5,12 @@ import java.io.File;
 import android.app.AlertDialog;
 import android.content.Context;
 import android.content.DialogInterface;
+import android.content.SharedPreferences;
 import android.content.res.Resources;
 import android.location.Location;
 import android.net.Uri;
 import android.os.AsyncTask;
+import android.text.InputFilter;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -22,6 +24,8 @@ import twitter4j.StatusUpdate;
 public class TweetFaceDialog extends AlertDialog {
 	private final static String TAG = "MobileFace-TweetFaceDialog";
 
+	private final static int TWEET_MAX_LENGTH = 140;
+
 	public TweetFaceDialog(Context context, final Twitter twitter, String tweet, final File face, final Location location) {
 		super(context);
 
@@ -33,6 +37,10 @@ public class TweetFaceDialog extends AlertDialog {
 
 		final EditText text = (EditText) view.findViewById(R.id.tweet_preview_text);
 		text.setText(tweet);
+
+		SharedPreferences prefs = context.getSharedPreferences("",Context.MODE_PRIVATE);
+		int mediaChars = prefs.getInt(resources.getString(R.string.pref_twitter_media_chars),23);
+		text.setFilters(new InputFilter[] {new InputFilter.LengthFilter(TWEET_MAX_LENGTH - mediaChars)});
 
 		ImageView image = (ImageView) view.findViewById(R.id.tweet_preview_image);
 		image.setImageURI(Uri.fromFile(face));
@@ -55,7 +63,10 @@ public class TweetFaceDialog extends AlertDialog {
 						status.setMedia(face);
 
 						if(location == null) Log.i(TAG,"location is null");
-						else status.setLocation(new GeoLocation(location.getLatitude(),location.getLongitude()));
+						else {
+							status.setDisplayCoordinates(true);
+							status.setLocation(new GeoLocation(location.getLatitude(),location.getLongitude()));
+						}
 
 						twitter.updateStatus(status);
 					} catch(Exception e) {
