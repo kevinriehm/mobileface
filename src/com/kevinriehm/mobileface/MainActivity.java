@@ -65,9 +65,6 @@ public class MainActivity extends Activity implements CvCameraViewListener2 {
 	private static final String TWITTER_KEY = "DyrwKl9MGt0MmjRAVlKbqL7XB";
 	private static final String TWITTER_SECRET = "w6MiNQ3ONhFPK0JJiKD9IkWADfmKjXyhEde2vxk2SHrYX4k8wz";
 
-	private static final String PREF_TWITTER_TOKEN = "twitter_token";
-	private static final String PREF_TWITTER_SECRET = "twitter_secret";
-
 	private static final double FACE_SCALE = 0.3;
 
 	private CameraBridgeViewBase cameraView;
@@ -341,9 +338,9 @@ public class MainActivity extends Activity implements CvCameraViewListener2 {
 				twitterToken = accessToken.getToken();
 				twitterSecret = accessToken.getTokenSecret();
 
-				SharedPreferences.Editor prefsEditor = getPreferences(MODE_PRIVATE).edit();
-				prefsEditor.putString(PREF_TWITTER_TOKEN,twitterToken);
-				prefsEditor.putString(PREF_TWITTER_SECRET,twitterSecret);
+				SharedPreferences.Editor prefsEditor = getSharedPreferences("",MODE_PRIVATE).edit();
+				prefsEditor.putString(getResources().getString(R.string.pref_twitter_token),twitterToken);
+				prefsEditor.putString(getResources().getString(R.string.pref_twitter_secret),twitterSecret);
 				prefsEditor.apply();
 			} catch(Exception e) {
 				Log.e(TAG,e.toString());
@@ -360,11 +357,9 @@ public class MainActivity extends Activity implements CvCameraViewListener2 {
 
 	// Ensure we are authorized with Twitter
 	private boolean checkTwitterCredentials() {
-		SharedPreferences prefs = getPreferences(MODE_PRIVATE);
-		String twitterToken = prefs.getString(PREF_TWITTER_TOKEN,null);
-		String twitterSecret = prefs.getString(PREF_TWITTER_SECRET,null);
-
-		Log.i(TAG,"stored Twitter credentials: " + twitterToken + ", " + twitterSecret);
+		SharedPreferences prefs = getSharedPreferences("",MODE_PRIVATE);
+		String twitterToken = prefs.getString(getResources().getString(R.string.pref_twitter_token),null);
+		String twitterSecret = prefs.getString(getResources().getString(R.string.pref_twitter_secret),null);
 
 		// Do we need to get credentials?
 		if(twitterToken == null || twitterSecret == null) {
@@ -380,7 +375,7 @@ public class MainActivity extends Activity implements CvCameraViewListener2 {
 			return false;
 		}
 
-		Log.i(TAG,"have Twitter credentials: " + twitterToken + ", " + twitterSecret);
+		Log.i(TAG,"have Twitter credentials");
 
 		// Build a configuration with these credentials
 		ConfigurationBuilder builder = new ConfigurationBuilder();

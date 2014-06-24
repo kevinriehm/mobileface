@@ -2,14 +2,19 @@
 <resources>
 	<string name="app_name">Tweet A Face</string>
 
+	<string name="menu_deauth">Logout</string>
+
+	<string name="deauthed_message">This app has logged out from your Twitter account.</string>
+
+	<string name="pref_twitter_token">twitter_token</string>
+	<string name="pref_twitter_secret">twitter_secret</string>
+	<string name="pref_twitter_media_chars">twitter_media_chars</string>
+
 	<string name="twitter_callback_url">oauth://mobileface.kevinriehm.com</string>
 
 	<string name="no_faces_title">Can\'t find a face!</string>
 	<string name="no_faces_message">Please look directly at the camera, and make sure your face is circled in red.</string>
 	<string name="no_faces_button">OK</string>
-
-	<string name="uploading_title">Please Wait</string>
-	<string name="uploading_message">Uploading image...</string>
 
 	<string name="tweet_preview_title">Tweet A Face</string>
 	<string name="tweet_preview_positive">Tweet</string>
