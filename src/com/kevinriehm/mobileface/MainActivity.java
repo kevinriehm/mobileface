@@ -133,7 +133,9 @@ public class MainActivity extends Activity implements CvCameraViewListener2 {
 
 		switch(requestCode) {
 			case REQUEST_TWITTER_AUTH:
-				receiveTwitterCredentials(data.getData());
+				if(resultCode == RESULT_OK) {
+					receiveTwitterCredentials(data.getData());
+				}
 				break;
 
 			default: Log.e(TAG,"unhandled requestCode: " + requestCode); break;
