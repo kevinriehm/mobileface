@@ -25,9 +25,6 @@ public class TwitterAuthActivity extends Activity {
 			}
 
 			public boolean shouldOverrideUrlLoading(WebView view, String url) {
-				Log.i(TAG,url);
-				Log.i(TAG,getResources().getString(R.string.twitter_callback_url));
-
 				// Is this the callback we gave to Twitter?
 				if(url.startsWith(getResources().getString(R.string.twitter_callback_url))) {
 					Log.i(TAG,"finishing");
