@@ -62,9 +62,6 @@ public class MainActivity extends Activity implements CvCameraViewListener2 {
 
 	private static final int REQUEST_TWITTER_AUTH = 0;
 
-	private static final String TWITTER_KEY = "DyrwKl9MGt0MmjRAVlKbqL7XB";
-	private static final String TWITTER_SECRET = "w6MiNQ3ONhFPK0JJiKD9IkWADfmKjXyhEde2vxk2SHrYX4k8wz";
-
 	private static final double FACE_SCALE = 0.3;
 
 	private CameraBridgeViewBase cameraView;
@@ -75,6 +72,9 @@ public class MainActivity extends Activity implements CvCameraViewListener2 {
 	private Mat currentFrameGray;
 	private Mat currentFrameRgba;
 	private MatOfRect currentFrameFaces;
+
+	private String twitterConsumerKey;
+	private String twitterConsumerSecret;
 
 	private Twitter twitter;
 	private RequestToken requestToken;
@@ -115,6 +115,10 @@ public class MainActivity extends Activity implements CvCameraViewListener2 {
 		cameraView.setCameraIndex(CameraBridgeViewBase.CAMERA_ID_FRONT);
 //		cameraView.setMaxFrameSize(200,200);
 		cameraView.enableFpsMeter();
+
+		// Un-obfuscate the Twitter credentials
+		twitterConsumerKey = getObfuscatedData(R.raw.twitter_consumer_key);
+		twitterConsumerSecret = getObfuscatedData(R.raw.twitter_consumer_secret);
 	}
 
 	public boolean onCreateOptionsMenu(Menu menu) {
@@ -292,6 +296,24 @@ public class MainActivity extends Activity implements CvCameraViewListener2 {
 
 	// Helper classes/functions
 
+	// De-obfuscate whatever data resid refers to
+	private String getObfuscatedData(int resid) {
+		String data = "";
+
+		InputStream stream = getResources().openRawResource(resid);
+
+		try {
+			byte buf[] = new byte[2];
+			while(stream.read(buf,0,2) == 2)
+				data += (char) (buf[0] ^ buf[1]);
+		} catch(Exception e) {
+			Log.e(TAG,e.toString());
+			e.printStackTrace();
+		}
+
+		return data;
+	}
+
 	private class GetTwitterCredentialsTask extends AsyncTask<Void, Void, Void> {
 		ProgressDialog dialog;
 
@@ -367,8 +389,8 @@ public class MainActivity extends Activity implements CvCameraViewListener2 {
 		if(twitterToken == null || twitterSecret == null) {
 			// Build a configuration with generic credentials
 			ConfigurationBuilder builder = new ConfigurationBuilder();
-			builder.setOAuthConsumerKey(TWITTER_KEY);
-			builder.setOAuthConsumerSecret(TWITTER_SECRET);
+			builder.setOAuthConsumerKey(twitterConsumerKey);
+			builder.setOAuthConsumerSecret(twitterConsumerSecret);
 			twitter = new TwitterFactory(builder.build()).getInstance();
 
 			Log.i(TAG,"need Twitter credentials");
@@ -381,8 +403,8 @@ public class MainActivity extends Activity implements CvCameraViewListener2 {
 
 		// Build a configuration with these credentials
 		ConfigurationBuilder builder = new ConfigurationBuilder();
-		builder.setOAuthConsumerKey(TWITTER_KEY);
-		builder.setOAuthConsumerSecret(TWITTER_SECRET);
+		builder.setOAuthConsumerKey(twitterConsumerKey);
+		builder.setOAuthConsumerSecret(twitterConsumerSecret);
 		builder.setOAuthAccessToken(twitterToken);
 		builder.setOAuthAccessTokenSecret(twitterSecret);
 		twitter = new TwitterFactory(builder.build()).getInstance();
@@ -394,8 +416,8 @@ public class MainActivity extends Activity implements CvCameraViewListener2 {
 	private void receiveTwitterCredentials(Uri uri) {
 		// Build a configuration with generic credentials
 		ConfigurationBuilder builder = new ConfigurationBuilder();
-		builder.setOAuthConsumerKey(TWITTER_KEY);
-		builder.setOAuthConsumerSecret(TWITTER_SECRET);
+		builder.setOAuthConsumerKey(twitterConsumerKey);
+		builder.setOAuthConsumerSecret(twitterConsumerSecret);
 		twitter = new TwitterFactory(builder.build()).getInstance();
 
 		try {
@@ -417,3 +439,4 @@ public class MainActivity extends Activity implements CvCameraViewListener2 {
 		return faces;
 	}
 }
+

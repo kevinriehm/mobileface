@@ -1,7 +1,8 @@
-OpenCV-2.4.9-android-sdk
+bin
+gen
 
 local.properties
 
-bin
-gen
+res/raw/twitter_consumer_key
+res/raw/twitter_consumer_secret
 
