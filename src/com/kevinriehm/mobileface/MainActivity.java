@@ -64,7 +64,7 @@ public class MainActivity extends Activity implements CvCameraViewListener2 {
 
 	private static final double FACE_SCALE = 0.3;
 
-	private CameraBridgeViewBase cameraView;
+	private VisualView visualView;
 
 	private String faceFilePath;
 	private CascadeClassifier faceDetector;
@@ -110,26 +110,18 @@ public class MainActivity extends Activity implements CvCameraViewListener2 {
 		}
 
 		// Set up the camera view
-		cameraView = (CameraBridgeViewBase) findViewById(R.id.camera_view);
-		cameraView.setCvCameraViewListener(this);
-		cameraView.setCameraIndex(CameraBridgeViewBase.CAMERA_ID_FRONT);
-//		cameraView.setMaxFrameSize(200,200);
-		cameraView.enableFpsMeter();
+		visualView = (VisualView) findViewById(R.id.visual_view);
+		visualView.setFrameCallback(new FrameProcessor());
 
 		// Un-obfuscate the Twitter credentials
 		twitterConsumerKey = getObfuscatedData(R.raw.twitter_consumer_key);
 		twitterConsumerSecret = getObfuscatedData(R.raw.twitter_consumer_secret);
 	}
 
-	public boolean onCreateOptionsMenu(Menu menu) {
-		getMenuInflater().inflate(R.menu.main,menu);
-		return true;
-	}
-
 	public void onPause() {
 		super.onPause();
 
-		cameraView.disableView();
+		visualView.disable();
 	}
 
 	public void onActivityResult(int requestCode, int resultCode, Intent data) {
@@ -159,7 +151,7 @@ public class MainActivity extends Activity implements CvCameraViewListener2 {
 					faceDetector = new CascadeClassifier(faceFilePath);
 
 					// Activate the camera processing
-					cameraView.enableView();
+					visualView.enable();
 				} else super.onManagerConnected(status);
 			}
 		});
@@ -170,7 +162,7 @@ public class MainActivity extends Activity implements CvCameraViewListener2 {
 	public void onDestroy() {
 		super.onDestroy();
 
-		cameraView.disableView();
+		visualView.disable();
 	}
 
 	// CvCameraViewListener2 implementation
@@ -187,6 +179,37 @@ public class MainActivity extends Activity implements CvCameraViewListener2 {
 	public Mat onCameraFrame(CvCameraViewFrame frame) {
 		Mat gray = frame.gray();
 		Mat rgba = frame.rgba();
+
+		Mat tempGray, tempRgba;
+
+		// Account for device orientation
+		switch(((WindowManager) getSystemService(WINDOW_SERVICE)).getDefaultDisplay().getRotation()) {
+		case Surface.ROTATION_0:
+			Core.flip(gray,gray,1);
+			Core.flip(rgba,rgba,1);
+			break;
+
+//		case Surface.ROTATION_90:
+//			tempGray = gray.t();
+//			tempRgba = rgba.t();
+//			Core.flip(tempGray,tempGray,1);
+//			Core.flip(tempRgba,tempRgba,1);
+//			//Imgproc.resize(tempGray,tempGray,gray.size());
+//			//Imgproc.resize(tempRgba,tempRgba,rgba.size());
+//			gray = tempGray;
+//			rgba = tempRgba;
+//			break;
+
+		case Surface.ROTATION_180:
+			Core.flip(gray,gray,0);
+			Core.flip(rgba,rgba,0);
+			break;
+
+//		case Surface.ROTATION_270:
+//			gray = frame.gray().t();
+//			rgba = frame.rgba().t();
+//			break;
+		}
 
 		// Draw an ellipse around any detected faces
 		MatOfRect faces = findFaces(gray);
@@ -274,7 +297,7 @@ public class MainActivity extends Activity implements CvCameraViewListener2 {
 		if(faceMatRGB != null) faceMatRGB.release();
 	}
 
-	public void deauthenticate(MenuItem item) {
+	public void deauthenticate(View view) {
 		// Wipe it all out
 		twitterToken = null;
 		twitterSecret = null;

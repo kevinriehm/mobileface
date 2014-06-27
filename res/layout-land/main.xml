@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+	android:layout_width="match_parent"
+	android:layout_height="match_parent"
+	android:keepScreenOn="true">
+	<com.kevinriehm.mobileface.VisualView
+		android:id="@+id/visual_view"
+		android:layout_width="match_parent"
+		android:layout_height="match_parent" />
+
+	<Button
+		android:layout_width="wrap_content"
+		android:layout_height="wrap_content"
+		android:alpha="0.5"
+		android:text="@string/deauth_button"
+		android:onClick="deauthenticate" />
+
+	<ImageButton
+		android:layout_width="wrap_content"
+		android:layout_height="match_parent"
+		android:layout_alignParentRight="true"
+		android:alpha="0.5"
+		android:src="@drawable/camera"
+		android:onClick="tweetSelfie" />
+</RelativeLayout>
+
