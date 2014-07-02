@@ -31,10 +31,10 @@ ShapePredictor& ShapePredictor::operator= (ShapePredictor const&rhs)
   _rect = rhs._rect;
   _pdm = rhs._pdm;
   _warp = rhs._warp;
-  _C.resize(_K); _R.resize(_K);
+  _c.resize(_K); _r.resize(_K);
   for(int i = 0; i < _K; i++){
-    _C[i] = rhs._C[i].clone();
-    _R[i] = rhs._R[i].clone();
+    _c[i] = rhs._c[i].clone();
+    _r[i] = rhs._r[i].clone();
   }
   x_.create(_warp._nPix+1,1,CV_64F);
   y_.create(2*_idx.rows,1,CV_64F);
@@ -66,10 +66,10 @@ void ShapePredictor::Save(const char* fname, bool binary)
 //==============================================================================
 void ShapePredictor::Read(ifstream &s)
 {
-  s >> _K; _C.resize(_K); _R.resize(_K);
+  s >> _K; _c.resize(_K); _r.resize(_K);
   for(int i = 0; i < _K; i++){
-    FACETRACKER::IO::ReadMat(s,_C[i]);
-    FACETRACKER::IO::ReadMat(s,_R[i]);
+    FACETRACKER::IO::ReadMat(s,_c[i]);
+    FACETRACKER::IO::ReadMat(s,_r[i]);
   }
   FACETRACKER::IO::ReadMat(s,_idx);
   _pdm.Read(s); _warp.Read(s);
@@ -91,10 +91,10 @@ void ShapePredictor::ReadBinary(ifstream &s, bool readType)
   }
   
   s.read(reinterpret_cast<char*>(&_K), sizeof(_K));
-  _C.resize(_K); _R.resize(_K);
+  _c.resize(_K); _r.resize(_K);
   for(int i = 0; i < _K; i++){
-    FACETRACKER::IOBinary::ReadMat(s,_C[i]);
-    FACETRACKER::IOBinary::ReadMat(s,_R[i]);
+    FACETRACKER::IOBinary::ReadMat(s,_c[i]);
+    FACETRACKER::IOBinary::ReadMat(s,_r[i]);
   }
   FACETRACKER::IOBinary::ReadMat(s,_idx);
   _pdm.ReadBinary(s); _warp.ReadBinary(s);
@@ -112,8 +112,8 @@ void ShapePredictor::Write(ofstream &s, bool binary)
   if(!binary){
     s << _K << " ";
     for(int i = 0; i < _K; i++){
-      FACETRACKER::IO::WriteMat(s,_C[i]);
-      FACETRACKER::IO::WriteMat(s,_R[i]);
+      FACETRACKER::IO::WriteMat(s,_c[i]);
+      FACETRACKER::IO::WriteMat(s,_r[i]);
     }
     FACETRACKER::IO::WriteMat(s,_idx);
     _pdm.Write(s); _warp.Write(s); 
@@ -125,8 +125,8 @@ void ShapePredictor::Write(ofstream &s, bool binary)
     s.write(reinterpret_cast<char*>(&t), sizeof(t));
     s.write(reinterpret_cast<char*>(&_K), sizeof(_K));
     for(int i = 0; i < _K; i++){
-      FACETRACKER::IOBinary::WriteMat(s,_C[i]);
-      FACETRACKER::IOBinary::WriteMat(s,_R[i]);
+      FACETRACKER::IOBinary::WriteMat(s,_c[i]);
+      FACETRACKER::IOBinary::WriteMat(s,_r[i]);
     }
     FACETRACKER::IOBinary::WriteMat(s,_idx);
     _pdm.Write(s, binary); _warp.Write(s, binary);
@@ -143,7 +143,7 @@ cv::Mat ShapePredictor::Predict(cv::Mat &shape,cv::Mat &im)
   equalizeHist(img,img);
   cv::Mat x = x_(cv::Rect(0,0,1,_warp._nPix));
   _warp.Vectorize(crop_,x); cv::normalize(x,x); x_.db(_warp._nPix,0) = 1.0;
-  y_ = _R[k]*x_; 
+  y_ = _r[k]*x_; 
   for(int i = 0; i < n; i++){
     y_.db(i  ,0) += _warp._xmin;
     y_.db(i+n,0) += _warp._ymin;
@@ -162,11 +162,11 @@ int ShapePredictor::FindCluster(cv::Mat &shape)
   }
   double a1,b1,tx1,ty1,a2,b2,tx2,ty2,v,vmin = 0; int l = -1; cv::Mat S;
   for(int k = 0; k < _K; k++){
-    FACETRACKER::CalcSimT(_C[k],z_,a1,b1,tx1,ty1);
+    FACETRACKER::CalcSimT(_c[k],z_,a1,b1,tx1,ty1);
     FACETRACKER::invSimT(a1,b1,tx1,ty1,a2,b2,tx2,ty2);
     z_.copyTo(y_);
     FACETRACKER::SimT(y_,a2,b2,tx2,ty2); 
-    v = cv::norm(y_,_C[k]);
+    v = cv::norm(y_,_c[k]);
     if((v < vmin) || (l < 0)){vmin = v; l = k;}
   }return l;
 }
