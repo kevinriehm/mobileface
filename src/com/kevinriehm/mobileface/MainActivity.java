@@ -57,21 +57,14 @@ import org.opencv.highgui.Highgui;
 import org.opencv.imgproc.Imgproc;
 import org.opencv.objdetect.CascadeClassifier;
 
-public class MainActivity extends Activity implements CvCameraViewListener2 {
+public class MainActivity extends Activity {
 	private static final String TAG = "MobileFace-MainActivity";
 
 	private static final int REQUEST_TWITTER_AUTH = 0;
 
-	private static final double FACE_SCALE = 0.3;
-
 	private VisualView visualView;
 
 	private String faceFilePath;
-	private CascadeClassifier faceDetector;
-
-	private Mat currentFrameGray;
-	private Mat currentFrameRgba;
-	private MatOfRect currentFrameFaces;
 
 	private String twitterConsumerKey;
 	private String twitterConsumerSecret;
@@ -111,7 +104,6 @@ public class MainActivity extends Activity implements CvCameraViewListener2 {
 
 		// Set up the camera view
 		visualView = (VisualView) findViewById(R.id.visual_view);
-		visualView.setFrameCallback(new FrameProcessor());
 
 		// Un-obfuscate the Twitter credentials
 		twitterConsumerKey = getObfuscatedData(R.raw.twitter_consumer_key);
@@ -147,10 +139,8 @@ public class MainActivity extends Activity implements CvCameraViewListener2 {
 		OpenCVLoader.initAsync(OpenCVLoader.OPENCV_VERSION_2_4_9,this,new BaseLoaderCallback(this) {
 			public void onManagerConnected(int status) {
 				if(status == LoaderCallbackInterface.SUCCESS) {
-					// Set up the face detector
-					faceDetector = new CascadeClassifier(faceFilePath);
-
 					// Activate the camera processing
+					visualView.setClassifierPath(faceFilePath);
 					visualView.enable();
 				} else super.onManagerConnected(status);
 			}
@@ -165,79 +155,20 @@ public class MainActivity extends Activity implements CvCameraViewListener2 {
 		visualView.disable();
 	}
 
-	// CvCameraViewListener2 implementation
-
-	public void onCameraViewStarted(int width, int height) {
-	}
-
-	public void onCameraViewStopped() {
-		currentFrameGray = null;
-		currentFrameRgba = null;
-		currentFrameFaces = null;
-	}
-
-	public Mat onCameraFrame(CvCameraViewFrame frame) {
-		Mat gray = frame.gray();
-		Mat rgba = frame.rgba();
-
-		Mat tempGray, tempRgba;
-
-		// Account for device orientation
-		switch(((WindowManager) getSystemService(WINDOW_SERVICE)).getDefaultDisplay().getRotation()) {
-		case Surface.ROTATION_0:
-			Core.flip(gray,gray,1);
-			Core.flip(rgba,rgba,1);
-			break;
-
-//		case Surface.ROTATION_90:
-//			tempGray = gray.t();
-//			tempRgba = rgba.t();
-//			Core.flip(tempGray,tempGray,1);
-//			Core.flip(tempRgba,tempRgba,1);
-//			//Imgproc.resize(tempGray,tempGray,gray.size());
-//			//Imgproc.resize(tempRgba,tempRgba,rgba.size());
-//			gray = tempGray;
-//			rgba = tempRgba;
-//			break;
-
-		case Surface.ROTATION_180:
-			Core.flip(gray,gray,0);
-			Core.flip(rgba,rgba,0);
-			break;
-
-//		case Surface.ROTATION_270:
-//			gray = frame.gray().t();
-//			rgba = frame.rgba().t();
-//			break;
-		}
-
-		// Draw an ellipse around any detected faces
-		MatOfRect faces = findFaces(gray);
-
-		// Save this in case the user takes a picture now
-		if(currentFrameGray != null) currentFrameGray.release();
-		if(currentFrameRgba != null) currentFrameRgba.release();
-
-		currentFrameGray = gray.clone();
-		currentFrameRgba = rgba.clone();
-		currentFrameFaces = faces;
-
-		for(Rect rect : faces.toArray()) {
-			Point midpoint = new Point((rect.tl().x + rect.br().x)/2, (rect.tl().y + rect.br().y)/2);
-			Core.ellipse(rgba,new RotatedRect(midpoint,rect.size(),0),new Scalar(255,0,0));
-		}
-
-		return rgba;
-	}
-
 	// UI callbacks
 
 	public void tweetSelfie(View view) {
-		// Sanity checks
-		if(currentFrameGray == null || currentFrameRgba == null)
+		// Try saving the tweet image
+		File faceFile = null;
+		try {
+			faceFile = File.createTempFile("selfie",".jpg",getDir("temp",Context.MODE_PRIVATE));
+		} catch(Exception e) {
+			Log.e(TAG,e.toString());
+			e.printStackTrace();
 			return;
+		}
 
-		if(currentFrameFaces.toArray().length < 1) { // Didn't find any faces?
+		if(!visualView.saveFaceImage(faceFile.getAbsolutePath())) { // Didn't find any faces?
 			AlertDialog.Builder builder = new AlertDialog.Builder(this);
 
 			builder.setTitle(R.string.no_faces_title);
@@ -252,49 +183,22 @@ public class MainActivity extends Activity implements CvCameraViewListener2 {
 			return;
 		}
 
-		// Crop it out and save it to a file
-		Mat faceMatBGR = null;
-		Mat faceMatRGB = null;
-		try {
-			Log.i(TAG,currentFrameFaces.toArray()[0].toString());
-			faceMatBGR = new Mat();
-			faceMatRGB = new Mat(currentFrameRgba,currentFrameFaces.toArray()[0]);
-			Imgproc.cvtColor(faceMatRGB,faceMatBGR,Imgproc.COLOR_RGB2BGR);
-		} catch(Exception e) {
-			Log.e(TAG,e.toString());
-			e.printStackTrace();
-		}
+		// Get our location
+		Criteria criteria = new Criteria();
+		criteria.setAccuracy(Criteria.ACCURACY_FINE);
 
-		File faceFile = null;
-		try {
-			// Get our location
-			Criteria criteria = new Criteria();
-			criteria.setAccuracy(Criteria.ACCURACY_FINE);
+		LocationManager locationmanager = (LocationManager) getSystemService(LOCATION_SERVICE);
+		String provider = locationmanager.getBestProvider(criteria,true);
+		Location location = provider == null ? null : locationmanager.getLastKnownLocation(provider);
 
-			LocationManager locationmanager = (LocationManager) getSystemService(LOCATION_SERVICE);
-			String provider = locationmanager.getBestProvider(criteria,true);
-			Location location = provider == null ? null : locationmanager.getLastKnownLocation(provider);
+		// Record the date and time
+		SimpleDateFormat format = new SimpleDateFormat("cccc MMMM d, y 'at' h:mm a");
 
-			// Record the date and time
-			SimpleDateFormat format = new SimpleDateFormat("cccc MMMM d, y 'at' h:mm a");
+		// Build the tweet text
+		String tweet = "My face on " + format.format(new Date()) + ".";
 
-			// Build the tweet text
-			String tweet = "My face on " + format.format(new Date()) + ".";
-
-			// Save the tweet image
-			faceFile = File.createTempFile("selfie",".jpg",getDir("temp",Context.MODE_PRIVATE));
-
-			Highgui.imwrite(faceFile.getAbsolutePath(),faceMatBGR);
-
-			// Send it on its merry way
-			new TweetFaceDialog(this,twitter,tweet,faceFile,location).show();
-		} catch(Exception e) {
-			Log.e(TAG,e.toString());
-			e.printStackTrace();
-		}
-
-		if(faceMatBGR != null) faceMatBGR.release();
-		if(faceMatRGB != null) faceMatRGB.release();
+		// Send it on its merry way
+		new TweetFaceDialog(this,twitter,tweet,faceFile,location).show();
 	}
 
 	public void deauthenticate(View view) {
@@ -450,16 +354,6 @@ public class MainActivity extends Activity implements CvCameraViewListener2 {
 			Log.e(TAG,e.toString());
 			e.printStackTrace();
 		}
-	}
-
-	private MatOfRect findFaces(Mat image) {
-		MatOfRect faces = new MatOfRect();
-
-		double minFaceSize = Math.round(FACE_SCALE*image.width());
-
-		faceDetector.detectMultiScale(image,faces,1.1,2,2,new Size(minFaceSize,minFaceSize),new Size());
-
-		return faces;
 	}
 }
 

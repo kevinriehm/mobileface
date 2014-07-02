@@ -1,7 +1,12 @@
 package com.kevinriehm.mobileface;
 
+import java.nio.ByteBuffer;
+
 import android.content.Context;
+import android.graphics.Bitmap;
+import android.graphics.Canvas;
 import android.graphics.ImageFormat;
+import android.graphics.Matrix;
 import android.hardware.Camera;
 import android.util.AttributeSet;
 import android.util.Log;
@@ -16,29 +21,23 @@ import android.widget.TextView;
 
 import org.opencv.core.Mat;
 
-public class VisualView extends ViewGroup implements Camera.PreviewCallback, SurfaceHolder.Callback {
+public class VisualView extends ViewGroup {
 	private static final String TAG = "MobileFace-VisualView";
-
-	private FrameCallback callback;
 
 	private Mode mode;
 
 	private boolean enabled;
 
-	private Camera camera;
-	private Camera.CameraInfo cameraInfo;
-	private int cameraFacing;
-
-	private SurfaceView surface;
+	private VisualSurfaceView surface;
 
 	private int sourceWidth;
 	private int sourceHeight;
 
-	private TextView statusText;
-
-	private int fps;
-	private int fpsCount;
-	private long fpsStart;
+	static {
+		System.loadLibrary("gnustl_shared");
+		System.loadLibrary("opencv_java");
+		System.loadLibrary("mobileface");
+	}
 
 	public VisualView(Context context, AttributeSet attrs) {
 		super(context,attrs);
@@ -46,29 +45,15 @@ public class VisualView extends ViewGroup implements Camera.PreviewCallback, Sur
 		enabled = false;
 
 		// Create the actual display surface
-		surface = new SurfaceView(context);
+		surface = new VisualSurfaceView(context);
 		addView(surface);
 
-		// Get notifications about the surface
-		surface.getHolder().addCallback(this);
-
-		// Default to the front-facing camera
+		// Default to the camera
 		mode = Mode.CAMERA;
-		cameraFacing = Camera.CameraInfo.CAMERA_FACING_FRONT;
 
 		// Just fill in some arbitrary values so we don't crash
 		sourceWidth = 800;
 		sourceHeight = 600;
-
-		// Add an info box
-		statusText = new TextView(context);
-		statusText.setGravity(Gravity.TOP | Gravity.CENTER);
-		addView(statusText);
-
-		// FPS counter
-		fps = 0;
-		fpsCount = 0;
-		fpsStart = System.currentTimeMillis();
 	}
 
 	// Getters and setters
@@ -80,25 +65,14 @@ public class VisualView extends ViewGroup implements Camera.PreviewCallback, Sur
 		enable();
 	}
 
-	public void setCameraFacing(int _cameraFacing) {
-		cameraFacing = _cameraFacing;
-
-		disable();
-		enable();
+	public void setClassifierPath(String path) {
+		surface.classifierPath = path;
 	}
 
 	// Other public stuff
 
 	public enum Mode {
 		CAMERA
-	}
-
-	public interface FrameCallback {
-		public Mat onFrame(Mat frame);
-	}
-
-	public void setFrameCallback(FrameCallback _callback) {
-		callback = _callback;
 	}
 
 	public void enable() {
@@ -112,15 +86,6 @@ public class VisualView extends ViewGroup implements Camera.PreviewCallback, Sur
 		disable();
 
 		// Now do the actual setup
-		switch(mode) {
-		case CAMERA:
-			findCamera();
-			activateCamera();
-			updateOrientation();
-			camera.startPreview();
-			break;
-		}
-
 		requestLayout();
 
 		enabled = true;
@@ -131,15 +96,15 @@ public class VisualView extends ViewGroup implements Camera.PreviewCallback, Sur
 
 		switch(mode) {
 		case CAMERA:
-			if(camera != null) {
-				camera.stopPreview();
-				camera.setPreviewCallbackWithBuffer(null);
-				releaseCamera();
-			}
+			surface.disable();
 			break;
 		}
 
 		enabled = false;
+	}
+
+	public boolean saveFaceImage(String filename) {
+		return surface.saveFaceImage(filename);
 	}
 
 	// ViewGroup overrides
@@ -174,65 +139,86 @@ public class VisualView extends ViewGroup implements Camera.PreviewCallback, Sur
 		}
 
 		surface.layout(left + hortMargin,top + vertMargin,right - hortMargin,bottom - vertMargin);
-
-		statusText.layout(left,top,right,bottom);
-	}
-
-	// Camera.PreviewCallback implementation
-
-	public void onPreviewFrame(byte[] data, Camera camera) {
-		// Point ourselves the right way around
-		updateOrientation();
-
-		// FPS counter
-		fpsCount++;
-		long time = System.currentTimeMillis();
-		if(time >= fpsStart + 1000) {
-			fps = fpsCount;
-			fpsCount = 0;
-			fpsStart += 1000;
-		}
-
-		int targetFps[] = new int[2];
-		camera.getParameters().getPreviewFpsRange(targetFps);
-
-		// Update the info box
-		statusText.setText(""
-			+ sourceWidth + "x" + sourceHeight + "\n"
-			+ fps + " FPS (Target: " + (targetFps[0]/1000.) + "-" + (targetFps[1]/1000.) + ")"
-		);
-
-		// Put the buffer back in the bucket
-		camera.addCallbackBuffer(data);
-	}
-
-	// SurfaceHolder.Callback implementation
-
-	public void surfaceCreated(SurfaceHolder holder) {
-		Log.i(TAG,"surfaceCreated()");
-	}
-
-	public void surfaceChanged(SurfaceHolder holder, int format, int w, int h) {
-		Log.i(TAG,"surfaceChanged()");
-
-		disable();
-		enable();
-	}
-
-	public void surfaceDestroyed(SurfaceHolder holder) {
-		Log.i(TAG,"surfaceDestroyed()");
-
-		disable();
 	}
 
 	// Etc.
+
+	private class VisualSurfaceView extends SurfaceView {
+		public String classifierPath;
+
+		private Bitmap bitmap;
+		private Matrix matrix;
+
+		private ByteBuffer data;
+
+		private int fps;
+		private int fpsCount;
+		private long fpsStart;
+
+		VisualSurfaceView(Context context) {
+			super(context);
+
+			fps = 0;
+			fpsCount = 0;
+			fpsStart = System.currentTimeMillis();
+
+			setWillNotDraw(false);
+		}
+
+		private native boolean saveFaceImage(String filename);
+
+		private native void processCameraFrame(Bitmap bitmap);
+		private native void releaseCamera();
+
+		public void disable() {
+			switch(mode) {
+			case CAMERA: releaseCamera(); break;
+			}
+		}
+
+		private void setSourceDimensions(int width, int height) {
+			sourceWidth = width;
+			sourceHeight = height;
+		}
+
+		protected void onSizeChanged(int w, int h, int oldw, int oldh) {
+			if(w == oldw && h == oldh) return;
+
+			if(bitmap != null) bitmap.recycle();
+			bitmap = Bitmap.createBitmap(w,h,Bitmap.Config.ARGB_8888);
+		}
+
+		protected void onDraw(Canvas canvas) {
+			if(!enabled) return;
+
+			switch(mode) {
+			case CAMERA: processCameraFrame(bitmap); break;
+			}
+
+			matrix = new Matrix();
+			matrix.postScale((float) getWidth()/sourceWidth,(float) getHeight()/sourceHeight);
+
+			canvas.drawBitmap(bitmap,matrix,null);
+
+			// Handle FPS
+			fpsCount++;
+			if(System.currentTimeMillis() >= fpsStart + 1000) {
+				fps = fpsCount;
+				fpsCount = 0;
+				fpsStart += 1000;
+			}
+
+			// Draw the next frame as soon as possible
+			invalidate();
+		}
+	}
 
 	// Accumulate camera and device orientation
 	private int getSummedOrientation() {
 		int orientation;
 		int adjustment;
 
-		orientation = cameraInfo == null ? 0 : cameraInfo.orientation;
+		orientation = 0;
 
 		WindowManager windowManager = (WindowManager) getContext().getSystemService("window");
 		switch(windowManager.getDefaultDisplay().getRotation()) {
@@ -244,89 +230,6 @@ public class VisualView extends ViewGroup implements Camera.PreviewCallback, Sur
 		}
 
 		return (orientation + adjustment)%360;
-	}
-
-	// Adjust the camera preview based on the device orientation
-	private void updateOrientation() {
-		camera.setDisplayOrientation((360 - getSummedOrientation())%360);
-	}
-
-	// Find the first camera matching our parameters, or the last one
-	private void findCamera() {
-		Log.i(TAG,"findCamera()");
-
-		int numCameras = Camera.getNumberOfCameras();
-		for(int i = 0; i < numCameras; i++) {
-			cameraInfo = new Camera.CameraInfo();
-			Camera.getCameraInfo(i,cameraInfo);
-
-			try {
-				if(cameraInfo.facing == cameraFacing || i == numCameras - 1) {
-					camera = Camera.open(i);
-					Log.i(TAG,"Opened camera " + i + " (" + camera + ")");
-					return;
-				}
-			} catch(Exception e) {
-			}
-		}
-
-		camera = null;
-		cameraInfo = null;
-	}
-
-	// Activate the camera preview
-	private void activateCamera() {
-		Log.i(TAG,"activateCamera()");
-		Log.i(TAG,"trying to activate camera (" + camera + ")");
-
-		if(camera != null) {
-			try {
-				Log.i(TAG,"activating camera (" + camera + ")");
-
-				camera.setPreviewCallbackWithBuffer(this);
-				camera.setPreviewDisplay(surface.getHolder());
-
-				Camera.Parameters params = camera.getParameters();
-
-				// Use the largest available preview size
-				sourceWidth = 0;
-				sourceHeight = 0;
-
-				for(Camera.Size size : params.getSupportedPreviewSizes()) {
-					if(size.width*size.height > sourceWidth*sourceHeight) {
-						sourceWidth = size.width;
-						sourceHeight = size.height;
-					}
-				}
-
-				params.setPreviewSize(sourceWidth,sourceHeight);
-
-				for(Integer i : params.getSupportedPreviewFormats()) {
-					Log.i(TAG,"Supported format: " + i);
-				}
-
-				camera.setParameters(params);
-
-				// Allocate a frame buffer
-				int bufferSize = sourceWidth*sourceHeight
-					*ImageFormat.getBitsPerPixel(ImageFormat.NV21);
-				camera.addCallbackBuffer(new byte[bufferSize]);
-			} catch(Exception e) {
-				Log.e(TAG,e.toString());
-				e.printStackTrace();
-			}
-		}
-	}
-
-	// Clean up the camera
-	private void releaseCamera() {
-		Log.i(TAG,"releaseCamera()");
-
-		if(camera != null)
-			camera.release();
-
-		camera = null;
-		cameraInfo = null;
 	}
 }
 
