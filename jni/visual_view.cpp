@@ -14,6 +14,8 @@
 #include <opencv2/opencv.hpp>
 #include <opencv2/contrib/detection_based_tracker.hpp>
 
+#include <tracker/FaceTracker.hpp>
+
 #define CAMERA_WIDTH  960
 #define CAMERA_HEIGHT 540
 
@@ -24,6 +26,9 @@
 struct data_t {
 	cv::VideoCapture *capture;
 	cv::DetectionBasedTracker *tracker;
+
+	FACETRACKER::FaceTracker *faceTracker;
+	FACETRACKER::FaceTrackerParams *faceTrackerParams;
 
 	cv::Rect face;
 };
@@ -36,10 +41,12 @@ std::string to_string(T val) {
 }
 
 void processFrame(JNIEnv *jenv, jobject jthis, data_t *data, uint8_t *pixels, AndroidBitmapInfo &info, cv::Mat &frame) {
-	cv::Point facecenter;
+	int trackResult;
 	cv::Mat gray, output;
+	cv::Point facecenter;
 	cv::Size facesize, outsize;
 	std::vector<cv::Rect> faces;
+	FACETRACKER::PointVector faceshape;
 
 	output = cv::Mat(frame.size(),CV_8UC4,pixels,info.stride);
 
@@ -51,15 +58,24 @@ void processFrame(JNIEnv *jenv, jobject jthis, data_t *data, uint8_t *pixels, An
 
 	// Get the biggest detected object
 	data->face = cv::Rect();
-	for(int i = 0; i < faces.size(); i++)
+	for(unsigned int i = 0; i < faces.size(); i++)
 		if(faces[i].width*faces[i].height > data->face.width*data->face.height)
 			data->face = faces[i];
 
-	// Indicate it with an ellipse
-	if(data->face.width > 0) {
-		facecenter = cv::Point(data->face.x + data->face.width/2,data->face.y + data->face.height/2);
-		facesize = cv::Size(data->face.width/2,data->face.height/2);
-		cv::ellipse(frame,facecenter,facesize,0,0,360,cv::Scalar(0,0,0xFF),2);
+	// Indicate it with a rectangle
+	if(data->face.width > 0)
+		cv::rectangle(frame,data->face,cv::Scalar(0,0xFF,0),2);
+
+	// Hand it off to the CI2CV SDK
+	if(data->faceTracker) {
+		trackResult = data->faceTracker->NewFrame(gray,data->faceTrackerParams);
+LOGI(to_string(trackResult).c_str());
+		// Draw the face if the tracking quality is good enough
+		if(trackResult >= 1 || trackResult <= 10) {
+			faceshape = data->faceTracker->getShape();
+			for(unsigned int i = 0; i < faceshape.size(); i++)
+				cv::circle(frame,faceshape[i],1,cv::Scalar(0,0,0xFF));
+		} else data->faceTracker->Reset();
 	}
 
 	// Export the preview image
@@ -83,10 +99,10 @@ extern "C" void Java_com_kevinriehm_mobileface_VisualView_00024VisualSurfaceView
 	cv::Mat frame;
 	jobject o_data;
 	AndroidBitmapInfo info;
-	jstring s_classifierpath;
-	const char *classifierpath;
-	jfieldID f_data, f_classifierpath;
 	DetectionBasedTracker::Parameters trackerParams;
+	jstring s_classifierpath, s_modelpath, s_paramspath;
+	const char *classifierpath, *modelpath, *paramspath;
+	jfieldID f_data, f_classifierpath, f_modelpath, f_paramspath;
 
 	AndroidBitmap_getInfo(jenv,bitmap,&info);
 	if(info.format != ANDROID_BITMAP_FORMAT_RGBA_8888) {
@@ -129,6 +145,25 @@ extern "C" void Java_com_kevinriehm_mobileface_VisualView_00024VisualSurfaceView
 
 		data->tracker->run();
 
+		// Load the CI2CV face tracker
+		f_modelpath = jenv->GetFieldID(c_this,"modelPath","Ljava/lang/String;");
+		s_modelpath = (jstring) jenv->GetObjectField(jthis,f_modelpath);
+		modelpath = jenv->GetStringUTFChars(s_modelpath,NULL);
+LOGI(modelpath);
+		f_paramspath = jenv->GetFieldID(c_this,"paramsPath","Ljava/lang/String;");
+		s_paramspath = (jstring) jenv->GetObjectField(jthis,f_paramspath);
+		paramspath = jenv->GetStringUTFChars(s_paramspath,NULL);
+LOGI(paramspath);
+		data->faceTracker = FACETRACKER::LoadFaceTracker(modelpath);
+		if(!data->faceTracker) LOGE("cannot load face tracker");
+
+		data->faceTrackerParams = FACETRACKER::LoadFaceTrackerParams(paramspath);
+		if(!data->faceTrackerParams) LOGE("cannot load face tracker parameters");
+
+		jenv->ReleaseStringUTFChars(s_paramspath,paramspath);
+		jenv->ReleaseStringUTFChars(s_modelpath,modelpath);
+
+		// Save the data
 		o_data = jenv->NewDirectByteBuffer(data,0);
 		jenv->SetObjectField(jthis,f_data,o_data);
 	}

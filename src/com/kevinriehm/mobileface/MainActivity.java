@@ -65,6 +65,8 @@ public class MainActivity extends Activity {
 	private VisualView visualView;
 
 	private String faceFilePath;
+	private String faceModelPath;
+	private String faceParamsPath;
 
 	private String twitterConsumerKey;
 	private String twitterConsumerSecret;
@@ -80,27 +82,10 @@ public class MainActivity extends Activity {
 
 		setContentView(R.layout.main);
 
-		// Copy the cascade specification to an actual file
-		try {
-			InputStream faceRes = getResources().openRawResource(R.raw.lbpcascade_frontalface);
-
-			File faceFile = new File(getDir("cascades",Context.MODE_PRIVATE),"lbpcascade_frontalface.xml");
-			FileOutputStream faceFileStream = new FileOutputStream(faceFile);
-			faceFilePath = faceFile.getAbsolutePath();
-
-			try {
-				int numBytes;
-				byte[] buf = new byte[1024];
-				while((numBytes = faceRes.read(buf)) > 0)
-					faceFileStream.write(buf,0,numBytes);
-			} finally {
-				faceRes.close();
-				faceFileStream.close();
-			}
-		} catch(Exception e) {
-			Log.e(TAG,e.toString());
-			e.printStackTrace();
-		}
+		// Export some resources to actual files
+		faceFilePath = copyResourceToFile(R.raw.lbpcascade_frontalface,"lbpcascade_frontalface.xml").getAbsolutePath();
+		faceModelPath = copyResourceToFile(R.raw.face_mytracker_binary,"face.mytracker.binary").getAbsolutePath();
+		faceParamsPath = copyResourceToFile(R.raw.face_mytrackerparams_binary,"face.mytrackerparams.binary").getAbsolutePath();
 
 		// Set up the camera view
 		visualView = (VisualView) findViewById(R.id.visual_view);
@@ -126,7 +111,7 @@ public class MainActivity extends Activity {
 				}
 				break;
 
-			default: Log.e(TAG,"unhandled requestCode: " + requestCode); break;
+			default: Log.e(TAG,"unhandled request code: " + requestCode); break;
 		}
 	}
 
@@ -141,6 +126,8 @@ public class MainActivity extends Activity {
 				if(status == LoaderCallbackInterface.SUCCESS) {
 					// Activate the camera processing
 					visualView.setClassifierPath(faceFilePath);
+					visualView.setModelPath(faceModelPath);
+					visualView.setParamsPath(faceParamsPath);
 					visualView.enable();
 				} else super.onManagerConnected(status);
 			}
@@ -222,6 +209,33 @@ public class MainActivity extends Activity {
 	}
 
 	// Helper classes/functions
+
+	// Copy the data in resid to filename
+	private File copyResourceToFile(int resid, String filename) {
+		File file = null;
+
+		try {
+			InputStream resStream = getResources().openRawResource(resid);
+
+			file = new File(getDir("resources",Context.MODE_PRIVATE),filename);
+			FileOutputStream fileStream = new FileOutputStream(file);
+
+			try {
+				int numBytes;
+				byte[] buf = new byte[1024];
+				while((numBytes = resStream.read(buf)) > 0)
+					fileStream.write(buf,0,numBytes);
+			} finally {
+				resStream.close();
+				fileStream.close();
+			}
+		} catch(Exception e) {
+			Log.e(TAG,e.toString());
+			e.printStackTrace();
+		}
+
+		return file;
+	}
 
 	// De-obfuscate whatever data resid refers to
 	private String getObfuscatedData(int resid) {

@@ -69,6 +69,14 @@ public class VisualView extends ViewGroup {
 		surface.classifierPath = path;
 	}
 
+	public void setModelPath(String path) {
+		surface.modelPath = path;
+	}
+
+	public void setParamsPath(String path) {
+		surface.paramsPath = path;
+	}
+
 	// Other public stuff
 
 	public enum Mode {
@@ -145,6 +153,8 @@ public class VisualView extends ViewGroup {
 
 	private class VisualSurfaceView extends SurfaceView {
 		public String classifierPath;
+		public String modelPath;
+		public String paramsPath;
 
 		private Bitmap bitmap;
 		private Matrix matrix;
