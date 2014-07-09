@@ -41,10 +41,6 @@ public class VisualView extends SurfaceView implements SurfaceHolder.Callback {
 
 	private ByteBuffer data;
 
-	private int fps;
-	private int fpsCount;
-	private long fpsStart;
-
 	static {
 		System.loadLibrary("gnustl_shared");
 		System.loadLibrary("opencv_java");
@@ -55,20 +51,13 @@ public class VisualView extends SurfaceView implements SurfaceHolder.Callback {
 		super(context,attrs);
 
 		enabled = false;
+		shouldEnable = false;
 
 		// Default to the camera
 		setMode(MODE_CAMERA);
 
-		// Prepare the FPS counter
-		fps = 0;
-		fpsCount = 0;
-		fpsStart = System.currentTimeMillis();
-
 		// Get notifications about the surface
 		getHolder().addCallback(this);
-
-		// Handle drawing ourselves
-//		setWillNotDraw(false);
 	}
 
 	// Getters and setters
