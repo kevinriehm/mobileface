@@ -31,8 +31,8 @@ namespace AVATAR
   class KSmooth{
   public:
     double _sigma;           /**< RGB variance     */
-    std::vector<cv::Mat> _X; /**< Training inputs  */
-    std::vector<cv::Mat> _Y; /**< Training outputs */
+    std::vector<cv::Mat> _x; /**< Training inputs  */
+    std::vector<cv::Mat> _y; /**< Training outputs */
     
     KSmooth(){;}
     KSmooth(const char* fname, bool binary = false){this->Load(fname, binary);}

@@ -1293,18 +1293,18 @@ return;
 //=============================================================================
 KSmooth& KSmooth::operator=(KSmooth const&rhs)
 {
-  _sigma = rhs._sigma; _X.resize(rhs._X.size()); _Y.resize(rhs._Y.size());
-  for(unsigned i = 0; i < _X.size(); i++){
-    _X[i] = rhs._X[i].clone(); _Y[i] = rhs._Y[i].clone();
+  _sigma = rhs._sigma; _x.resize(rhs._x.size()); _y.resize(rhs._y.size());
+  for(unsigned i = 0; i < _x.size(); i++){
+    _x[i] = rhs._x[i].clone(); _y[i] = rhs._y[i].clone();
   }return *this;
 }
 //=============================================================================
 void KSmooth::Read(ifstream &s)
 {
-  int N; s >> N >> _sigma; _X.resize(N); _Y.resize(N);
+  int N; s >> N >> _sigma; _x.resize(N); _y.resize(N);
   for(int i = 0; i < N; i++){
-    FACETRACKER::IO::ReadMat(s,_X[i]);
-    FACETRACKER::IO::ReadMat(s,_Y[i]);
+    FACETRACKER::IO::ReadMat(s,_x[i]);
+    FACETRACKER::IO::ReadMat(s,_y[i]);
   }
 }
 //=============================================================================
@@ -1319,32 +1319,32 @@ void KSmooth::ReadBinary(ifstream &s, bool readType)
   s.read(reinterpret_cast<char*>(&N), sizeof(N));
   s.read(reinterpret_cast<char*>(&_sigma), sizeof(_sigma));
 
-  _X.resize(N); _Y.resize(N);
+  _x.resize(N); _y.resize(N);
   for(int i = 0; i < N; i++){
-    FACETRACKER::IOBinary::ReadMat(s,_X[i]);
-    FACETRACKER::IOBinary::ReadMat(s,_Y[i]);
+    FACETRACKER::IOBinary::ReadMat(s,_x[i]);
+    FACETRACKER::IOBinary::ReadMat(s,_y[i]);
   }
 }
 //=============================================================================
 void KSmooth::Write(ofstream &s, bool binary)
 {
   if(!binary){
-    s << (int)_X.size() << " " << _sigma << " "; 
-    for(unsigned i = 0; i < _X.size(); i++){
-      FACETRACKER::IO::WriteMat(s,_X[i]);
-      FACETRACKER::IO::WriteMat(s,_Y[i]);
+    s << (int)_x.size() << " " << _sigma << " "; 
+    for(unsigned i = 0; i < _x.size(); i++){
+      FACETRACKER::IO::WriteMat(s,_x[i]);
+      FACETRACKER::IO::WriteMat(s,_y[i]);
     }
   }
   else{
     int t = FACETRACKER::IOBinary::KSMOOTH; 
     s.write(reinterpret_cast<char*>(&t), sizeof(t));
 
-    t = _X.size();
+    t = _x.size();
     s.write(reinterpret_cast<char*>(&t), sizeof(t));
     s.write(reinterpret_cast<char*>(&_sigma), sizeof(_sigma));
-    for(unsigned i = 0; i < _X.size(); i++){
-      FACETRACKER::IOBinary::WriteMat(s,_X[i]);
-      FACETRACKER::IOBinary::WriteMat(s,_Y[i]);
+    for(unsigned i = 0; i < _x.size(); i++){
+      FACETRACKER::IOBinary::WriteMat(s,_x[i]);
+      FACETRACKER::IOBinary::WriteMat(s,_y[i]);
     }
   }
 }
@@ -1353,22 +1353,22 @@ void KSmooth::Train(vector<cv::Mat> &Y,vector<cv::Mat> &X,
 		    double sigma)
 {
   _sigma = sigma;
-  _X.resize(X.size()); _Y.resize(Y.size());
-  for(unsigned i = 0; i < _X.size(); i++){
-    _X[i] = X[i].clone(); _Y[i] = Y[i].clone();
+  _x.resize(X.size()); _y.resize(Y.size());
+  for(unsigned i = 0; i < _x.size(); i++){
+    _x[i] = X[i].clone(); _y[i] = Y[i].clone();
   }return;
 }
 //=============================================================================
 cv::Mat KSmooth::Predict(cv::Mat &x)
 {
-  vector<double> a(_X.size()); double sum = 0.0;
-  for(unsigned i = 0; i < _X.size(); i++){
-    sum += (a[i] = this->Kernel(x,_X[i],_sigma));
+  vector<double> a(_x.size()); double sum = 0.0;
+  for(unsigned i = 0; i < _x.size(); i++){
+    sum += (a[i] = this->Kernel(x,_x[i],_sigma));
   }
-  cv::Mat y = cv::Mat::zeros(_Y[0].rows,_Y[0].cols,CV_64F);  
+  cv::Mat y = cv::Mat::zeros(_y[0].rows,_y[0].cols,CV_64F);  
   if(sum == 0){
-    sum = 1.0/_Y.size();for(unsigned i = 0; i < _Y.size(); i++)y += sum*_Y[i];
-  }else{for(unsigned i = 0; i < _Y.size(); i++)y += (a[i]/sum)*_Y[i];}
+    sum = 1.0/_y.size();for(unsigned i = 0; i < _y.size(); i++)y += sum*_y[i];
+  }else{for(unsigned i = 0; i < _y.size(); i++)y += (a[i]/sum)*_y[i];}
   return y;
 }
 //=============================================================================
