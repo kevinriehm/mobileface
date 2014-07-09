@@ -24,7 +24,7 @@ include $(OPENCV_SDK)/native/jni/OpenCV.mk
 
 LOCAL_MODULE := mobileface
 
-LOCAL_CFLAGS     += -Wall
+LOCAL_CFLAGS     += --std=c++11 -Wall -Wno-parentheses -Werror
 LOCAL_C_INCLUDES += $(LOCAL_PATH)/ci2cv
 LOCAL_LDLIBS     += -ljnigraphics -llog
 

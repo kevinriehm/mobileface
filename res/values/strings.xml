@@ -3,6 +3,7 @@
 	<string name="app_name">Tweet A Face</string>
 
 	<string name="deauth_button">Logout</string>
+	<string name="reset_tracking_button">Reset Tracking</string>
 
 	<string name="deauthed_message">This app has logged out from your Twitter account.</string>
 

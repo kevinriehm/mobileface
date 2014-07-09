@@ -15,6 +15,14 @@
 		android:text="@string/deauth_button"
 		android:onClick="deauthenticate" />
 
+	<Button
+		android:layout_width="wrap_content"
+		android:layout_height="wrap_content"
+		android:layout_alignParentRight="true"
+		android:alpha="0.5"
+		android:text="@string/reset_tracking_button"
+		android:onClick="resetTracking" />
+
 	<ImageButton
 		android:layout_width="match_parent"
 		android:layout_height="wrap_content"

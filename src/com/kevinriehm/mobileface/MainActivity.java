@@ -208,6 +208,10 @@ public class MainActivity extends Activity {
 		checkTwitterCredentials();
 	}
 
+	public void resetTracking(View view) {
+		visualView.resetTracking();
+	}
+
 	// Helper classes/functions
 
 	// Copy the data in resid to filename

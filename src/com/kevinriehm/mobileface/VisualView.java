@@ -7,6 +7,7 @@ import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.ImageFormat;
 import android.graphics.Matrix;
+import android.graphics.Rect;
 import android.hardware.Camera;
 import android.util.AttributeSet;
 import android.util.Log;
@@ -21,17 +22,28 @@ import android.widget.TextView;
 
 import org.opencv.core.Mat;
 
-public class VisualView extends ViewGroup {
+public class VisualView extends SurfaceView implements SurfaceHolder.Callback {
 	private static final String TAG = "MobileFace-VisualView";
 
-	private Mode mode;
+	public final int MODE_CAMERA = 0;
+
+	private int mode;
 
 	private boolean enabled;
+	private boolean shouldEnable;
 
-	private VisualSurfaceView surface;
+	public String classifierPath;
+	public String modelPath;
+	public String paramsPath;
 
-	private int sourceWidth;
-	private int sourceHeight;
+	private Bitmap bitmap;
+	private Matrix matrix;
+
+	private ByteBuffer data;
+
+	private int fps;
+	private int fpsCount;
+	private long fpsStart;
 
 	static {
 		System.loadLibrary("gnustl_shared");
@@ -44,21 +56,24 @@ public class VisualView extends ViewGroup {
 
 		enabled = false;
 
-		// Create the actual display surface
-		surface = new VisualSurfaceView(context);
-		addView(surface);
-
 		// Default to the camera
-		mode = Mode.CAMERA;
+		setMode(MODE_CAMERA);
 
-		// Just fill in some arbitrary values so we don't crash
-		sourceWidth = 800;
-		sourceHeight = 600;
+		// Prepare the FPS counter
+		fps = 0;
+		fpsCount = 0;
+		fpsStart = System.currentTimeMillis();
+
+		// Get notifications about the surface
+		getHolder().addCallback(this);
+
+		// Handle drawing ourselves
+//		setWillNotDraw(false);
 	}
 
 	// Getters and setters
 
-	public void setMode(Mode _mode) {
+	public void setMode(int _mode) {
 		mode = _mode;
 
 		disable();
@@ -66,161 +81,90 @@ public class VisualView extends ViewGroup {
 	}
 
 	public void setClassifierPath(String path) {
-		surface.classifierPath = path;
+		classifierPath = path;
 	}
 
 	public void setModelPath(String path) {
-		surface.modelPath = path;
+		modelPath = path;
 	}
 
 	public void setParamsPath(String path) {
-		surface.paramsPath = path;
+		paramsPath = path;
 	}
 
 	// Other public stuff
-
-	public enum Mode {
-		CAMERA
-	}
 
 	public void enable() {
 		Log.i(TAG,"enable()");
 
 		// No reason to repeat ourselves ourselves
-		if(enabled)
-			return;
+		if(enabled) return;
 
 		// Still be paranoid, though
 		disable();
 
+		if(bitmap == null) {
+			Log.e(TAG,"enable() called before surface creation");
+			shouldEnable = true;
+			return;
+		}
+
 		// Now do the actual setup
-		requestLayout();
+		spawnWorker(mode,bitmap);
 
 		enabled = true;
+		shouldEnable = false;
 	}
 
 	public void disable() {
 		Log.i(TAG,"disable()");
 
-		switch(mode) {
-		case CAMERA:
-			surface.disable();
-			break;
-		}
+		terminateWorker();
 
 		enabled = false;
 	}
 
-	public boolean saveFaceImage(String filename) {
-		return surface.saveFaceImage(filename);
+	public native void resetTracking();
+	public native boolean saveFaceImage(String filename);
+
+	// SurfaceView.Callback implementation
+
+	public void surfaceCreated(SurfaceHolder holder) {
+		Log.i(TAG,"surfaceCreated()");
 	}
 
-	// ViewGroup overrides
+	public void surfaceChanged(SurfaceHolder holder, int format, int width, int height) {
+		Log.i(TAG,"surfaceChanged()");
 
-	protected void onLayout(boolean changed, int left, int top, int right, int bottom) {
-		int width = right - left;
-		int height = bottom - top;
+		boolean reenable = enabled || shouldEnable;
 
-		int visualWidth;
-		int visualHeight;
+		if(reenable) disable();
 
-		// Adjust for orientation
-		int orientation = getSummedOrientation();
-		if(orientation == 0 || orientation == 180) {
-			visualWidth = sourceWidth;
-			visualHeight = sourceHeight;
-		} else {
-			visualWidth = sourceHeight;
-			visualHeight = sourceWidth;
-		}
+		if(bitmap != null) bitmap.recycle();
+		bitmap = Bitmap.createBitmap(width,height,Bitmap.Config.ARGB_8888);
 
-		int hortMargin;
-		int vertMargin;
-
-		// Fit to the display area
-		if(sourceWidth*height > width*sourceHeight) { // Source is too wide
-			hortMargin = 0;
-			vertMargin = (height - width*visualHeight/visualWidth)/2;
-		} else { // Source is too skinny
-			hortMargin = (width - height*visualWidth/visualHeight)/2;
-			vertMargin = 0;
-		}
-
-		surface.layout(left + hortMargin,top + vertMargin,right - hortMargin,bottom - vertMargin);
+		if(reenable) enable();
 	}
+
+	public void surfaceDestroyed(SurfaceHolder holder) {
+		Log.i(TAG,"surfaceDestroyed()");
+
+		disable();
+	}
+
+	// JNI declarations
+
+	private native void spawnWorker(int mode, Bitmap bitmap);
+	private native void terminateWorker();
 
 	// Etc.
 
-	private class VisualSurfaceView extends SurfaceView {
-		public String classifierPath;
-		public String modelPath;
-		public String paramsPath;
+	private void blitBitmap() {
+		if(bitmap == null) return;
 
-		private Bitmap bitmap;
-		private Matrix matrix;
-
-		private ByteBuffer data;
-
-		private int fps;
-		private int fpsCount;
-		private long fpsStart;
-
-		VisualSurfaceView(Context context) {
-			super(context);
-
-			fps = 0;
-			fpsCount = 0;
-			fpsStart = System.currentTimeMillis();
-
-			setWillNotDraw(false);
-		}
-
-		private native boolean saveFaceImage(String filename);
-
-		private native void processCameraFrame(Bitmap bitmap);
-		private native void releaseCamera();
-
-		public void disable() {
-			switch(mode) {
-			case CAMERA: releaseCamera(); break;
-			}
-		}
-
-		private void setSourceDimensions(int width, int height) {
-			sourceWidth = width;
-			sourceHeight = height;
-		}
-
-		protected void onSizeChanged(int w, int h, int oldw, int oldh) {
-			if(w == oldw && h == oldh) return;
-
-			if(bitmap != null) bitmap.recycle();
-			bitmap = Bitmap.createBitmap(w,h,Bitmap.Config.ARGB_8888);
-		}
-
-		protected void onDraw(Canvas canvas) {
-			if(!enabled) return;
-
-			switch(mode) {
-			case CAMERA: processCameraFrame(bitmap); break;
-			}
-
-			matrix = new Matrix();
-			matrix.postScale((float) getWidth()/sourceWidth,(float) getHeight()/sourceHeight);
-
-			canvas.drawBitmap(bitmap,matrix,null);
-
-			// Handle FPS
-			fpsCount++;
-			if(System.currentTimeMillis() >= fpsStart + 1000) {
-				fps = fpsCount;
-				fpsCount = 0;
-				fpsStart += 1000;
-			}
-
-			// Draw the next frame as soon as possible
-			invalidate();
-		}
+		Canvas canvas = getHolder().lockCanvas();
+		canvas.drawBitmap(bitmap,0,0,null);
+		getHolder().unlockCanvasAndPost(canvas);
 	}
 
 	// Accumulate camera and device orientation
