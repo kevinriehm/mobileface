@@ -12,7 +12,7 @@ LOCAL_MODULE := ci2cv
 LOCAL_CPP_FEATURES += rtti exceptions
 LOCAL_C_INCLUDES   += $(LOCAL_PATH)/ci2cv
 
-CI2CV_SRC_FILES := $(wildcard jni/ci2cv/tracker/*.cpp)
+CI2CV_SRC_FILES := $(wildcard jni/ci2cv/*/*.cpp)
 LOCAL_SRC_FILES := $(CI2CV_SRC_FILES:jni/%=%)
 
 include $(BUILD_STATIC_LIBRARY)
