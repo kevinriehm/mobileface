@@ -76,8 +76,10 @@ public class VisualView extends SurfaceView implements SurfaceHolder.Callback {
 	public void setMode(int _mode) {
 		mode = _mode;
 
-		disable();
-		enable();
+		if(enabled) {
+			disable();
+			enable();
+		}
 	}
 
 	public void setClassifierPath(String path) {
