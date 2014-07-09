@@ -219,7 +219,7 @@ void *processing_thread(data_t *data) {
 
 	pthread_cleanup_push((void (*)(void *)) cleanup_processing_thread,(void *) data);
 
-	sa.sa_mask = 0;
+	sigemptyset(&sa.sa_mask);
 	sa.sa_flags = 0;
 	sa.sa_handler = exit_processing_thread;
 	sigaction(SIGINT,&sa,NULL);
