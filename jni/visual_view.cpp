@@ -212,8 +212,10 @@ void exit_processing_thread(int signum) {
 
 void *processing_thread(data_t *data) {
 	jclass c_this;
+	double duration;
 	struct sigaction sa;
 	cv::Mat input, output;
+	struct timespec start, end;
 
 	pthread_cleanup_push((void (*)(void *)) cleanup_processing_thread,(void *) data);
 
@@ -234,9 +236,16 @@ void *processing_thread(data_t *data) {
 	data->tracker->run();
 
 	while(true) {
+		clock_gettime(CLOCK_MONOTONIC,&start);
+
 		get_frame(data,input);
 		process_frame(data,input,output);
 		draw_frame(data,output);
+
+		clock_gettime(CLOCK_MONOTONIC,&end);
+		duration = end.tv_sec - start.tv_sec
+			+ (end.tv_nsec - start.tv_nsec)/1e9;
+		LOGI(std::string("Frame time: ").append(to_string(duration)).c_str());
 	}
 
 	pthread_cleanup_pop(true);
