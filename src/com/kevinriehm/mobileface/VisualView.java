@@ -42,6 +42,8 @@ public class VisualView extends SurfaceView implements SurfaceHolder.Callback {
 
 	private ByteBuffer data;
 
+	private OrientationEventListener orientListener;
+
 	static {
 		System.loadLibrary("gnustl_shared");
 		System.loadLibrary("opencv_java");
@@ -59,6 +61,24 @@ public class VisualView extends SurfaceView implements SurfaceHolder.Callback {
 
 		// Get notifications about the surface
 		getHolder().addCallback(this);
+
+		// Get notifications about orientation changes
+		orientListener = new OrientationEventListener(context) {
+			private int oldOrientation = getDeviceOrientation()/90;
+
+			public void onOrientationChanged(int orientation) {
+				orientation = (orientation + 45)/90%4;
+
+				// We only need to know about 180 degree turns
+				if(oldOrientation != (orientation + 2)%4 || oldOrientation == orientation)
+					return;
+
+				setViewOrientation(90*orientation);
+
+				oldOrientation = orientation;
+			}
+		};
+		orientListener.enable();
 	}
 
 	// Getters and setters
@@ -83,6 +103,8 @@ public class VisualView extends SurfaceView implements SurfaceHolder.Callback {
 		avatarPath = path;
 	}
 
+	public native void setViewOrientation(int orientation);
+
 	// Other public stuff
 
 	public void enable() {
@@ -102,6 +124,7 @@ public class VisualView extends SurfaceView implements SurfaceHolder.Callback {
 
 		// Now do the actual setup
 		spawnWorker(mode,bitmap);
+		setViewOrientation(getDeviceOrientation());
 
 		enabled = true;
 		shouldEnable = false;
@@ -160,22 +183,16 @@ public class VisualView extends SurfaceView implements SurfaceHolder.Callback {
 	}
 
 	// Accumulate camera and device orientation
-	private int getSummedOrientation() {
-		int orientation;
-		int adjustment;
+	private int getDeviceOrientation() {
+		WindowManager windowManager = (WindowManager) getContext().getSystemService(Context.WINDOW_SERVICE);
 
-		orientation = 0;
-
-		WindowManager windowManager = (WindowManager) getContext().getSystemService("window");
 		switch(windowManager.getDefaultDisplay().getRotation()) {
 		default:
-		case Surface.ROTATION_0:   adjustment =   0; break;
-		case Surface.ROTATION_90:  adjustment =  90; break;
-		case Surface.ROTATION_180: adjustment = 180; break;
-		case Surface.ROTATION_270: adjustment = 270; break;
+		case Surface.ROTATION_0:   return   0;
+		case Surface.ROTATION_90:  return  90;
+		case Surface.ROTATION_180: return 180;
+		case Surface.ROTATION_270: return 270;
 		}
-
-		return (orientation + adjustment)%360;
 	}
 }
 

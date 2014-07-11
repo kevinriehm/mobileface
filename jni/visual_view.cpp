@@ -36,13 +36,16 @@ struct data_t {
 	JNIEnv *jenv;
 
 	jobject jthis;
-
-	volatile bool enabled;
 	pthread_t worker;
 
 	enum mode mode;
+	volatile bool enabled;
 
 	jobject bitmap;
+
+	volatile int orientation;
+	cv::Mat orientedframe;
+	cv::Mat orientedgray;
 
 	cv::VideoCapture *capture;
 	cv::DetectionBasedTracker *tracker;
@@ -110,7 +113,6 @@ void get_current_frame(data_t *data, cv::Mat &frame) {
 }
 
 void process_frame(data_t *data, cv::Mat &input, cv::Mat &output) {
-	cv::Mat gray;
 	cv::Point facecenter;
 	cv::Size facesize, outsize;
 	std::vector<cv::Rect> faces;
@@ -118,10 +120,52 @@ void process_frame(data_t *data, cv::Mat &input, cv::Mat &output) {
 
 	output = cv::Mat(input.size(),CV_8UC4);
 
-	gray = cv::Mat(input.size(),CV_8UC1);
-	cv::cvtColor(input,gray,CV_BGR2GRAY);
+	// Make sure the matricies are ready
+	if(data->orientation == 0 || data->orientation == 180) {
+		if(input.rows != data->orientedframe.rows || input.cols != data->orientedframe.cols)
+			data->orientedframe = cv::Mat(input.rows,input.cols,CV_8UC3);
 
-	data->tracker->process(gray);
+		if(input.rows != data->orientedgray.rows || input.cols != data->orientedgray.cols)
+			data->orientedgray = cv::Mat(input.rows,input.cols,CV_8UC1);
+
+		if(input.rows != output.rows || input.cols != output.cols)
+			output = cv::Mat(input.rows,input.cols,CV_8UC3);
+	} else {
+		if(input.rows != data->orientedframe.cols || input.cols != data->orientedframe.rows)
+			data->orientedframe = cv::Mat(input.cols,input.rows,CV_8UC3);
+
+		if(input.rows != data->orientedgray.cols || input.cols != data->orientedgray.rows)
+			data->orientedgray = cv::Mat(input.cols,input.rows,CV_8UC1);
+
+		if(input.rows != output.cols || input.cols != output.rows)
+			output = cv::Mat(input.cols,input.rows,CV_8UC3);
+	}
+
+	// Orient the frame properly
+	switch(data->orientation) {
+	case 0:
+		cv::flip(input,data->orientedframe,1);
+		break;
+
+	case 90:
+		cv::transpose(input,data->orientedframe);
+		break;
+
+	case 180:
+		cv::flip(input,data->orientedframe,0);
+		break;
+
+	case 270:
+		cv::transpose(input,data->orientedframe);
+		cv::flip(data->orientedframe,data->orientedframe,-1);
+		break;
+	}
+
+	// Get a grayscale version
+	cv::cvtColor(data->orientedframe,data->orientedgray,CV_BGR2GRAY);
+
+	// Look for faces
+	data->tracker->process(data->orientedgray);
 	data->tracker->getObjects(faces);
 
 	// Get the biggest detected object
@@ -132,26 +176,26 @@ void process_frame(data_t *data, cv::Mat &input, cv::Mat &output) {
 
 	// Indicate it with a rectangle
 	if(data->face.width > 0)
-		cv::rectangle(input,data->face,cv::Scalar(0,0xFF,0),2);
+		cv::rectangle(data->orientedframe,data->face,cv::Scalar(0,0xFF,0),2);
 
 	// Hand it off to the CI2CV SDK
 	if(data->facetracker) {
-		data->facestrength = data->facetracker->NewFrame(gray,data->facetrackerparams);
+		data->facestrength = data->facetracker->NewFrame(data->orientedgray,data->facetrackerparams);
 
 		// Outline and draw the avatar if the tracking quality is good enough
 		if(data->facestrength >= MIN_FACE_STRENGTH) {
 			faceshape = data->facetracker->getShape();
 
 			for(unsigned int i = 0; i < faceshape.size(); i++)
-				cv::circle(input,faceshape[i],1,cv::Scalar(0,0,0xFF));
+				cv::circle(data->orientedframe,faceshape[i],1,cv::Scalar(0,0,0xFF));
 
 			if(data->calibrated)
-				data->avatar->Animate(input,input,faceshape);
+				data->avatar->Animate(data->orientedframe,data->orientedframe,faceshape);
 		}
 	}
 
 	// Export the preview image
-	cv::cvtColor(input,output,CV_BGR2RGBA);
+	cv::cvtColor(data->orientedframe,output,CV_BGR2RGBA);
 }
 
 void draw_frame(data_t *data, cv::Mat &frame) {
@@ -273,6 +317,15 @@ void *processing_thread(data_t *data) {
 	return NULL;
 }
 
+extern "C" void Java_com_kevinriehm_mobileface_VisualView_setViewOrientation(JNIEnv *jenv, jobject jthis, jint orientation) {
+	data_t *data;
+
+	if(data = get_data(jenv,jthis)) {
+		LOGI(std::string("setting view orientation to ").append(to_string(orientation)).c_str());
+		data->orientation = orientation;
+	}
+}
+
 extern "C" void Java_com_kevinriehm_mobileface_VisualView_spawnWorker(JNIEnv *jenv, jobject jthis, jint mode, jobject bitmap) {
 	data_t *data;
 	jclass c_this;
@@ -290,8 +343,12 @@ extern "C" void Java_com_kevinriehm_mobileface_VisualView_spawnWorker(JNIEnv *je
 
 	jenv->GetJavaVM(&data->jvm);
 	data->jthis = jenv->NewGlobalRef(jthis);
+
+	data->mode = MODE_CAMERA;
 	data->enabled = true;
+
 	data->bitmap = jenv->NewGlobalRef(bitmap);
+	data->orientation = 0;
 
 	// Load the face classifier
 	f_classifierpath = jenv->GetFieldID(c_this,"classifierPath","Ljava/lang/String;");
