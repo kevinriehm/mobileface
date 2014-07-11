@@ -16,12 +16,22 @@
 		android:onClick="deauthenticate" />
 
 	<Button
+		android:id="@+id/reset_tracking"
 		android:layout_width="wrap_content"
 		android:layout_height="wrap_content"
 		android:layout_alignParentRight="true"
 		android:alpha="0.5"
 		android:text="@string/reset_tracking_button"
 		android:onClick="resetTracking" />
+
+	<Button
+		android:layout_width="wrap_content"
+		android:layout_height="wrap_content"
+		android:layout_alignParentRight="true"
+		android:layout_below="@+id/reset_tracking"
+		android:alpha="0.5"
+		android:text="@string/calibrate_button"
+		android:onClick="calibrateExpression" />
 
 	<ImageButton
 		android:layout_width="match_parent"

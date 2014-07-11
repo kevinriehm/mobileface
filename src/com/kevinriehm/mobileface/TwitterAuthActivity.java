@@ -19,6 +19,12 @@ public class TwitterAuthActivity extends Activity {
 		setContentView(R.layout.twitter_auth);
 
 		WebView webview = (WebView) findViewById(R.id.twitter_auth_webview);
+
+		if(webview == null) {
+			Log.e(TAG,"cannot find WebView");
+			return;
+		}
+
 		webview.setWebViewClient(new WebViewClient() {
 			public void onPageStarted(WebView view, String url, Bitmap favicon) {
 				shouldOverrideUrlLoading(view,url);

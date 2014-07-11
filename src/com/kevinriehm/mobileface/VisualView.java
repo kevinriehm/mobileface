@@ -35,6 +35,7 @@ public class VisualView extends SurfaceView implements SurfaceHolder.Callback {
 	public String classifierPath;
 	public String modelPath;
 	public String paramsPath;
+	public String avatarPath;
 
 	private Bitmap bitmap;
 	private Matrix matrix;
@@ -64,11 +65,6 @@ public class VisualView extends SurfaceView implements SurfaceHolder.Callback {
 
 	public void setMode(int _mode) {
 		mode = _mode;
-
-		if(enabled) {
-			disable();
-			enable();
-		}
 	}
 
 	public void setClassifierPath(String path) {
@@ -81,6 +77,10 @@ public class VisualView extends SurfaceView implements SurfaceHolder.Callback {
 
 	public void setParamsPath(String path) {
 		paramsPath = path;
+	}
+
+	public void setAvatarPath(String path) {
+		avatarPath = path;
 	}
 
 	// Other public stuff
@@ -116,6 +116,7 @@ public class VisualView extends SurfaceView implements SurfaceHolder.Callback {
 	}
 
 	public native void resetTracking();
+	public native boolean calibrateExpression();
 	public native boolean saveFaceImage(String filename);
 
 	// SurfaceView.Callback implementation

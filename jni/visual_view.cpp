@@ -15,10 +15,13 @@
 #include <opencv2/opencv.hpp>
 #include <opencv2/contrib/detection_based_tracker.hpp>
 
+#include <avatar/Avatar.hpp>
 #include <tracker/FaceTracker.hpp>
 
 #define CAMERA_WIDTH  640
 #define CAMERA_HEIGHT 480
+
+#define MIN_FACE_STRENGTH 1
 
 #define TAG "MobileFace-VisualView"
 #define LOGE(msg) __android_log_write(ANDROID_LOG_ERROR,TAG,msg)
@@ -44,8 +47,13 @@ struct data_t {
 	cv::VideoCapture *capture;
 	cv::DetectionBasedTracker *tracker;
 
-	FACETRACKER::FaceTracker *faceTracker;
-	FACETRACKER::FaceTrackerParams *faceTrackerParams;
+	FACETRACKER::FaceTracker *facetracker;
+	FACETRACKER::FaceTrackerParams *facetrackerparams;
+
+	int facestrength;
+	bool calibrated;
+
+	AVATAR::Avatar *avatar;
 
 	cv::Rect face;
 
@@ -93,9 +101,16 @@ void get_frame(data_t *data, cv::Mat &frame) {
 	}
 }
 
+void get_current_frame(data_t *data, cv::Mat &frame) {
+	switch(data->mode) {
+	case MODE_CAMERA:
+		data->capture->retrieve(frame);
+		break;
+	}
+}
+
 void process_frame(data_t *data, cv::Mat &input, cv::Mat &output) {
 	cv::Mat gray;
-	int trackResult;
 	cv::Point facecenter;
 	cv::Size facesize, outsize;
 	std::vector<cv::Rect> faces;
@@ -120,15 +135,19 @@ void process_frame(data_t *data, cv::Mat &input, cv::Mat &output) {
 		cv::rectangle(input,data->face,cv::Scalar(0,0xFF,0),2);
 
 	// Hand it off to the CI2CV SDK
-	if(data->faceTracker) {
-		trackResult = data->faceTracker->NewFrame(gray,data->faceTrackerParams);
+	if(data->facetracker) {
+		data->facestrength = data->facetracker->NewFrame(gray,data->facetrackerparams);
 
-		// Draw the face if the tracking quality is good enough
-		if(trackResult >= 1 || trackResult <= 10) {
-			faceshape = data->faceTracker->getShape();
+		// Outline and draw the avatar if the tracking quality is good enough
+		if(data->facestrength >= MIN_FACE_STRENGTH) {
+			faceshape = data->facetracker->getShape();
+
 			for(unsigned int i = 0; i < faceshape.size(); i++)
 				cv::circle(input,faceshape[i],1,cv::Scalar(0,0,0xFF));
-		} else data->faceTracker->Reset();
+
+			if(data->calibrated)
+				data->avatar->Animate(input,input,faceshape);
+		}
 	}
 
 	// Export the preview image
@@ -136,7 +155,8 @@ void process_frame(data_t *data, cv::Mat &input, cv::Mat &output) {
 }
 
 void draw_frame(data_t *data, cv::Mat &frame) {
-LOGI("draw_frame()");
+	LOGI("draw_frame()");
+
 	void *pixels;
 	cv::Mat bitmapmat;
 	AndroidBitmapInfo info;
@@ -257,9 +277,9 @@ extern "C" void Java_com_kevinriehm_mobileface_VisualView_spawnWorker(JNIEnv *je
 	data_t *data;
 	jclass c_this;
 	DetectionBasedTracker::Parameters trackerParams;
-	jstring s_classifierpath, s_modelpath, s_paramspath;
-	const char *classifierpath, *modelpath, *paramspath;
-	jfieldID f_classifierpath, f_modelpath, f_paramspath;
+	const char *avatarpath, *classifierpath, *modelpath, *paramspath;
+	jstring s_avatarpath, s_classifierpath, s_modelpath, s_paramspath;
+	jfieldID f_avatarpath, f_classifierpath, f_modelpath, f_paramspath;
 
 	// Is the worker already running?
 	if(data = get_data(jenv,jthis)) return;
@@ -290,14 +310,28 @@ extern "C" void Java_com_kevinriehm_mobileface_VisualView_spawnWorker(JNIEnv *je
 	s_paramspath = (jstring) jenv->GetObjectField(jthis,f_paramspath);
 	paramspath = jenv->GetStringUTFChars(s_paramspath,NULL);
 
-	data->faceTracker = FACETRACKER::LoadFaceTracker(modelpath);
-	if(!data->faceTracker) LOGE("cannot load face tracker");
+	data->facetracker = FACETRACKER::LoadFaceTracker(modelpath);
+	if(!data->facetracker) LOGE("cannot load face tracker");
 
-	data->faceTrackerParams = FACETRACKER::LoadFaceTrackerParams(paramspath);
-	if(!data->faceTrackerParams) LOGE("cannot load face tracker parameters");
+	data->facetrackerparams = FACETRACKER::LoadFaceTrackerParams(paramspath);
+	if(!data->facetrackerparams) LOGE("cannot load face tracker parameters");
 
 	jenv->ReleaseStringUTFChars(s_paramspath,paramspath);
 	jenv->ReleaseStringUTFChars(s_modelpath,modelpath);
+
+	data->facestrength = 0;
+	data->calibrated = false;
+
+	// Load the CI2CV avatar
+	f_avatarpath = jenv->GetFieldID(c_this,"avatarPath","Ljava/lang/String;");
+	s_avatarpath = (jstring) jenv->GetObjectField(jthis,f_avatarpath);
+	avatarpath = jenv->GetStringUTFChars(s_avatarpath,NULL);
+
+	data->avatar = AVATAR::LoadAvatar(avatarpath);
+	if(!data->avatar) LOGE("cannot load avatar");
+	data->avatar->setAvatar(2);
+
+	jenv->ReleaseStringUTFChars(s_avatarpath,avatarpath);
 
 	// Store the data
 	set_data(jenv,jthis,data);
@@ -318,8 +352,8 @@ extern "C" void Java_com_kevinriehm_mobileface_VisualView_terminateWorker(JNIEnv
 	pthread_join(data->worker,NULL);
 
 	// Clean up data
-	if(data->faceTrackerParams) delete data->faceTrackerParams;
-	if(data->faceTracker) delete data->faceTracker;
+	if(data->facetrackerparams) delete data->facetrackerparams;
+	if(data->facetracker) delete data->facetracker;
 	if(data->tracker) delete data->tracker;
 
 	jenv->DeleteGlobalRef(data->bitmap);
@@ -335,8 +369,34 @@ extern "C" void Java_com_kevinriehm_mobileface_VisualView_resetTracking(JNIEnv *
 
 	if(data = get_data(jenv,jthis)) {
 		LOGI("resetting face tracking");
-		data->faceTracker->Reset();
+		data->facetracker->Reset();
 	}
+}
+
+extern "C" bool Java_com_kevinriehm_mobileface_VisualView_calibrateExpression(JNIEnv *jenv, jobject jthis) {
+	data_t *data;
+	cv::Mat frame;
+	FACETRACKER::PointVector shape;
+
+	if(data = get_data(jenv,jthis)) {
+		LOGI("calibrating expression");
+
+		if(data->facestrength < MIN_FACE_STRENGTH) {
+			LOGE("cannot calibrate expression; face tracking too weak");
+			return false;
+		}
+
+		get_current_frame(data,frame);
+		shape = data->facetracker->getShape();
+
+		data->avatar->Initialise(frame,shape);
+
+		data->calibrated = true;
+
+		return true;
+	}
+
+	return false;
 }
 
 // Save the face from the current frame into filename;
@@ -354,7 +414,7 @@ extern "C" jboolean Java_com_kevinriehm_mobileface_VisualView_saveFaceImage(JNIE
 		// Save the image of the face
 		filestr = jenv->GetStringUTFChars(filename,NULL);
 
-		data->capture->retrieve(frame);
+		get_current_frame(data,frame);
 		face = cv::Mat(frame,data->face);
 		imwrite(std::string(filestr),face);
 

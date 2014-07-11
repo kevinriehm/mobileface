@@ -67,6 +67,7 @@ public class MainActivity extends Activity {
 	private String faceFilePath;
 	private String faceModelPath;
 	private String faceParamsPath;
+	private String avatarPath;
 
 	private String twitterConsumerKey;
 	private String twitterConsumerSecret;
@@ -86,6 +87,7 @@ public class MainActivity extends Activity {
 		faceFilePath = copyResourceToFile(R.raw.lbpcascade_frontalface,"lbpcascade_frontalface.xml").getAbsolutePath();
 		faceModelPath = copyResourceToFile(R.raw.face_mytracker_binary,"face.mytracker.binary").getAbsolutePath();
 		faceParamsPath = copyResourceToFile(R.raw.face_mytrackerparams_binary,"face.mytrackerparams.binary").getAbsolutePath();
+		avatarPath = copyResourceToFile(R.raw.ci2cv_avatar_binary,"ci2cv.avatar.binary").getAbsolutePath();
 
 		// Set up the camera view
 		visualView = (VisualView) findViewById(R.id.visual_view);
@@ -128,6 +130,7 @@ public class MainActivity extends Activity {
 					visualView.setClassifierPath(faceFilePath);
 					visualView.setModelPath(faceModelPath);
 					visualView.setParamsPath(faceParamsPath);
+					visualView.setAvatarPath(avatarPath);
 					visualView.enable();
 				} else super.onManagerConnected(status);
 			}
@@ -210,6 +213,10 @@ public class MainActivity extends Activity {
 
 	public void resetTracking(View view) {
 		visualView.resetTracking();
+	}
+
+	public void calibrateExpression(View view) {
+		visualView.calibrateExpression();
 	}
 
 	// Helper classes/functions
