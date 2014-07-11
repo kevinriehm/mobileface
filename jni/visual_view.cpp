@@ -232,7 +232,7 @@ void draw_frame(data_t *data, cv::Mat &frame) {
 
 	AndroidBitmap_unlockPixels(data->jenv,data->bitmap);
 
-	data->jenv->CallVoidMethod(data->jthis,data->m_blitBitmap);
+	data->jenv->CallVoidMethod(data->jthis,data->m_blitBitmap,xmargin,ymargin,w,h);
 }
 
 void init_source(data_t *data) {
@@ -293,7 +293,7 @@ void *processing_thread(data_t *data) {
 	LOGI("processing thread is alive");
 
 	c_this = data->jenv->GetObjectClass(data->jthis);
-	data->m_blitBitmap = data->jenv->GetMethodID(c_this,"blitBitmap","()V");
+	data->m_blitBitmap = data->jenv->GetMethodID(c_this,"blitBitmap","(IIII)V");
 
 	init_source(data);
 

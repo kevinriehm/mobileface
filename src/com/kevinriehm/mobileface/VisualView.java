@@ -174,11 +174,13 @@ public class VisualView extends SurfaceView implements SurfaceHolder.Callback {
 
 	// Etc.
 
-	private void blitBitmap() {
+	private void blitBitmap(int x, int y, int w, int h) {
 		if(bitmap == null) return;
 
+		Rect dirty = new Rect(x,y,x + w,y + h);
+
 		Canvas canvas = getHolder().lockCanvas();
-		canvas.drawBitmap(bitmap,0,0,null);
+		canvas.drawBitmap(bitmap,dirty,dirty,null);
 		getHolder().unlockCanvasAndPost(canvas);
 	}
 
