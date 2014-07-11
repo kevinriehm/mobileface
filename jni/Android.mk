@@ -5,6 +5,7 @@ OPENCV_SDK := $(wildcard $(LOCAL_PATH)/../libs/OpenCV-*-android-sdk/sdk)
 # CI2CV face analysis SDK
 include $(CLEAR_VARS)
 
+OPENCV_INSTALL_MODULES := on
 include $(OPENCV_SDK)/native/jni/OpenCV.mk
 
 LOCAL_MODULE := ci2cv
@@ -20,6 +21,7 @@ include $(BUILD_STATIC_LIBRARY)
 # Main image processing code
 include $(CLEAR_VARS)
 
+OPENCV_INSTALL_MODULES := on
 include $(OPENCV_SDK)/native/jni/OpenCV.mk
 
 LOCAL_MODULE := mobileface
