@@ -1,0 +1,3 @@
+[submodule "jni/ffmpeg"]
+	path = jni/ffmpeg
+	url = git://source.ffmpeg.org/ffmpeg.git
