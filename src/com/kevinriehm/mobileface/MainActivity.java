@@ -15,6 +15,7 @@ import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.database.Cursor;
 import android.location.Criteria;
 import android.location.Location;
 import android.location.LocationManager;
@@ -22,6 +23,7 @@ import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Bundle;
 import android.provider.Browser;
+import android.provider.MediaStore;
 import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
@@ -40,27 +42,14 @@ import twitter4j.auth.RequestToken;
 import twitter4j.conf.ConfigurationBuilder;
 
 import org.opencv.android.BaseLoaderCallback;
-import org.opencv.android.CameraBridgeViewBase;
-import org.opencv.android.CameraBridgeViewBase.CvCameraViewFrame;
-import org.opencv.android.CameraBridgeViewBase.CvCameraViewListener2;
 import org.opencv.android.LoaderCallbackInterface;
 import org.opencv.android.OpenCVLoader;
-import org.opencv.core.Core;
-import org.opencv.core.Mat;
-import org.opencv.core.MatOfRect;
-import org.opencv.core.Point;
-import org.opencv.core.Rect;
-import org.opencv.core.RotatedRect;
-import org.opencv.core.Scalar;
-import org.opencv.core.Size;
-import org.opencv.highgui.Highgui;
-import org.opencv.imgproc.Imgproc;
-import org.opencv.objdetect.CascadeClassifier;
 
 public class MainActivity extends Activity {
 	private static final String TAG = "MobileFace-MainActivity";
 
 	private static final int REQUEST_TWITTER_AUTH = 0;
+	private static final int REQUEST_VIDEO_FILE   = 1;
 
 	private VisualView visualView;
 
@@ -108,8 +97,33 @@ public class MainActivity extends Activity {
 
 		switch(requestCode) {
 			case REQUEST_TWITTER_AUTH:
-				if(resultCode == RESULT_OK) {
+				if(resultCode == RESULT_OK)
 					receiveTwitterCredentials(data.getData());
+				break;
+
+			case REQUEST_VIDEO_FILE:
+				if(resultCode == RESULT_OK) {
+					String path;
+
+					Uri uri = data.getData();
+					if(uri.getScheme().equals("content")) {
+						Cursor cursor = getContentResolver().query(uri,new String[] {MediaStore.MediaColumns.DATA},null,null,null);
+						cursor.moveToFirst();
+						path = cursor.getString(0);
+					} else if(uri.getScheme().equals("file"))
+						path = uri.getPath();
+					else {
+						Log.e(TAG,"unknown URI scheme: " + uri.getScheme());
+						break;
+					}
+
+					Log.i(TAG,"Video file path: " + path);
+
+					// Pass it on to the processor
+					visualView.setVideoPath(path);
+					visualView.setMode(VisualView.MODE_FILE);
+					visualView.disable();
+					visualView.enable();
 				}
 				break;
 
@@ -209,6 +223,16 @@ public class MainActivity extends Activity {
 
 		// Get new credentials
 		checkTwitterCredentials();
+	}
+
+	public void openVideo(View view) {
+		Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
+		intent.addCategory(Intent.CATEGORY_OPENABLE);
+		intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+		intent.setType("video/*");
+
+		Intent chooser = Intent.createChooser(intent,"Open a Video File");
+		startActivityForResult(chooser,REQUEST_VIDEO_FILE);
 	}
 
 	public void resetTracking(View view) {

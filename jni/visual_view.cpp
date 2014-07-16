@@ -1,5 +1,7 @@
+#include <cstdint>
 #include <ctime>
 #include <fstream>
+#include <memory>
 #include <streambuf>
 #include <string>
 #include <vector>
@@ -18,6 +20,12 @@
 #include <avatar/Avatar.hpp>
 #include <tracker/FaceTracker.hpp>
 
+extern "C" {
+#include <libavcodec/avcodec.h>
+#include <libavformat/avformat.h>
+#include <libswscale/swscale.h>
+}
+
 #define CAMERA_WIDTH  640
 #define CAMERA_HEIGHT 480
 
@@ -27,8 +35,9 @@
 #define LOGE(msg) __android_log_write(ANDROID_LOG_ERROR,TAG,msg)
 #define LOGI(msg) __android_log_write(ANDROID_LOG_INFO,TAG,msg)
 
-enum mode {
-	MODE_CAMERA
+enum {
+	MODE_CAMERA,
+	MODE_FILE
 };
 
 struct data_t {
@@ -38,7 +47,7 @@ struct data_t {
 	jobject jthis;
 	pthread_t worker;
 
-	enum mode mode;
+	int mode;
 	volatile bool enabled;
 
 	jobject bitmap;
@@ -47,16 +56,30 @@ struct data_t {
 	cv::Mat orientedframe;
 	cv::Mat orientedgray;
 
-	cv::VideoCapture *capture;
-	cv::DetectionBasedTracker *tracker;
+	std::unique_ptr<cv::VideoCapture> capture;
+	std::unique_ptr<cv::DetectionBasedTracker> tracker;
 
-	FACETRACKER::FaceTracker *facetracker;
-	FACETRACKER::FaceTrackerParams *facetrackerparams;
+	std::string videopath;
+
+	AVFormatContext *avformat;
+	AVStream *avstream;
+	AVCodecContext *avcodec;
+
+	AVPacket avpacket;
+	int avpacketoffset;
+
+	AVFrame *avframe;
+	AVPicture avpicture;
+
+	SwsContext *swscontext;
+
+	std::unique_ptr<FACETRACKER::FaceTracker> facetracker;
+	std::unique_ptr<FACETRACKER::FaceTrackerParams> facetrackerparams;
 
 	int facestrength;
 	bool calibrated;
 
-	AVATAR::Avatar *avatar;
+	std::unique_ptr<AVATAR::Avatar> avatar;
 
 	cv::Rect face;
 
@@ -68,6 +91,35 @@ std::string to_string(T val) {
 	std::ostringstream os;
 	os << val;
 	return os.str();
+}
+
+jint get_int(JNIEnv *jenv, jobject jthis, const char *name) {
+	jclass c_this;
+	jfieldID f_int;
+
+	c_this = jenv->GetObjectClass(jthis);
+	f_int = jenv->GetFieldID(c_this,name,"I");
+
+	return jenv->GetIntField(jthis,f_int);
+}
+
+std::string get_string(JNIEnv *jenv, jobject jthis, const char *name) {
+	jclass c_this;
+	jstring s_string;
+	jfieldID f_string;
+	std::string string;
+	const char *cstring;
+
+	c_this = jenv->GetObjectClass(jthis);
+	f_string = jenv->GetFieldID(c_this,name,"Ljava/lang/String;");
+	s_string = (jstring) jenv->GetObjectField(jthis,f_string);
+	if(!s_string) return std::string();
+
+	cstring = jenv->GetStringUTFChars(s_string,NULL);
+	string = std::string(cstring);
+	jenv->ReleaseStringUTFChars(s_string,cstring);
+
+	return string;
 }
 
 data_t *get_data(JNIEnv *jenv, jobject jthis) {
@@ -96,18 +148,77 @@ void set_data(JNIEnv *jenv, jobject jthis, data_t *data) {
 	} else jenv->SetObjectField(jthis,f_data,NULL);
 }
 
-void get_frame(data_t *data, cv::Mat &frame) {
+bool get_frame(data_t *data, cv::Mat &frame) {
 	switch(data->mode) {
 	case MODE_CAMERA:
 		*data->capture >> frame;
 		break;
+
+	case MODE_FILE:
+		// Get a frame
+		int gotframe;
+		do {
+			// Demux a packet from the stream
+			if(data->avpacketoffset >= data->avpacket.size) {
+				data->avpacketoffset = 0;
+
+				do {
+					if(data->avpacket.buf)
+						av_free_packet(&data->avpacket);
+
+					if(av_read_frame(data->avformat,&data->avpacket) < 0)
+						return false; // EOF
+				} while(data->avpacket.stream_index != data->avstream->index);
+			}
+
+			AVPacket packet;
+			av_init_packet(&packet);
+			packet.data = data->avpacket.data + data->avpacketoffset;
+			packet.size = data->avpacket.size - data->avpacketoffset;
+
+			// Decode a frame from the packet, if we can
+			int nbytes = avcodec_decode_video2(data->avcodec,data->avframe,&gotframe,&packet);
+			if(nbytes < 0) {
+				LOGE("cannot decode frame");
+				return false;
+			}
+			data->avpacketoffset += nbytes;
+		} while(!gotframe);
+
+		// Make sure we have a destination
+		if(!data->avpicture.data[0])
+			avpicture_alloc(&data->avpicture,PIX_FMT_BGR24,data->avframe->width,data->avframe->height);
+
+		// Transform from YUV to BGR
+		data->swscontext = sws_getCachedContext(data->swscontext,data->avframe->width,data->avframe->height,
+			(AVPixelFormat) data->avframe->format,data->avframe->width,data->avframe->height,
+			(AVPixelFormat) PIX_FMT_BGR24,SWS_POINT,NULL,NULL,NULL);
+		sws_scale(data->swscontext,data->avframe->data,data->avframe->linesize,0,data->avframe->height,
+			data->avpicture.data,data->avpicture.linesize);
+
+		// Export it to frame
+		frame = cv::Mat(data->avframe->height,data->avframe->width,CV_8UC3,data->avpicture.data[0],
+			data->avpicture.linesize[0]);
+		break;
 	}
+
+	return true;
 }
 
 void get_current_frame(data_t *data, cv::Mat &frame) {
 	switch(data->mode) {
 	case MODE_CAMERA:
 		data->capture->retrieve(frame);
+		break;
+
+	case MODE_FILE:
+		// Transform from YUV to BGR
+		sws_scale(data->swscontext,data->avframe->data,data->avframe->linesize,0,data->avframe->height,
+			data->avpicture.data,data->avpicture.linesize);
+
+		// Export it to frame
+		frame = cv::Mat(data->avframe->height,data->avframe->width,CV_8UC3,data->avpicture.data[0],
+			data->avpicture.linesize[0]);
 		break;
 	}
 }
@@ -180,17 +291,21 @@ void process_frame(data_t *data, cv::Mat &input, cv::Mat &output) {
 
 	// Hand it off to the CI2CV SDK
 	if(data->facetracker) {
-		data->facestrength = data->facetracker->NewFrame(data->orientedgray,data->facetrackerparams);
+		data->facestrength = data->facetracker->NewFrame(data->orientedgray,data->facetrackerparams.get());
 
 		// Outline and draw the avatar if the tracking quality is good enough
 		if(data->facestrength >= MIN_FACE_STRENGTH) {
 			faceshape = data->facetracker->getShape();
 
+			if(!data->calibrated) {
+				data->avatar->Initialise(data->orientedframe,faceshape);
+				data->calibrated = true;
+			}
+
 			for(unsigned int i = 0; i < faceshape.size(); i++)
 				cv::circle(data->orientedframe,faceshape[i],1,cv::Scalar(0,0,0xFF));
 
-			if(data->calibrated)
-				data->avatar->Animate(data->orientedframe,data->orientedframe,faceshape);
+			data->avatar->Animate(data->orientedframe,data->orientedframe,faceshape);
 		}
 	}
 
@@ -235,29 +350,118 @@ void draw_frame(data_t *data, cv::Mat &frame) {
 	data->jenv->CallVoidMethod(data->jthis,data->m_blitBitmap,xmargin,ymargin,w,h);
 }
 
-void init_source(data_t *data) {
+bool init_source(data_t *data) {
+	LOGI(std::string("initializing source, mode ").append(to_string(data->mode)).c_str());
+
+	AVCodec *codec;
+
 	switch(data->mode) {
 	case MODE_CAMERA:
-		data->capture = new cv::VideoCapture(CV_CAP_ANDROID_FRONT);
+		data->capture = std::unique_ptr<cv::VideoCapture>(new cv::VideoCapture(CV_CAP_ANDROID_FRONT));
 		if(!data->capture->isOpened()) {
-			LOGE("failed to open camera");
-			delete data->capture;
+			LOGE("cannot open camera");
+			data->capture.reset();
+			return false;
 		}
 
 		// Adjust the camera dimensions
 		data->capture->set(CV_CAP_PROP_FRAME_WIDTH,CAMERA_WIDTH);
 		data->capture->set(CV_CAP_PROP_FRAME_HEIGHT,CAMERA_HEIGHT);
 		break;
+
+	case MODE_FILE:
+		av_register_all();
+
+		// Open the video file
+		data->avformat = avformat_alloc_context();
+		if(avformat_open_input(&data->avformat,data->videopath.c_str(),NULL,NULL) < 0) {
+			LOGE(std::string("cannot open ").append(data->videopath).c_str());
+			return false;;
+		}
+
+		// Get info about the file
+		if(avformat_find_stream_info(data->avformat,NULL) < 0) {
+			LOGE("cannot get video file info");
+			return false;
+		}
+
+		// Find the first video stream
+		data->avstream = NULL;
+		for(unsigned int i = 0; i < data->avformat->nb_streams; i++) {
+			AVCodecContext *codec = data->avformat->streams[i]->codec;
+			if(codec->codec_type == AVMEDIA_TYPE_VIDEO) {
+				data->avstream = data->avformat->streams[i];
+				break;
+			}
+		}
+
+		// Abort if there isn't one
+		if(!data->avstream) {
+			LOGE("cannot find video stream");
+			return false;
+		}
+
+		// Find a decoder for the stream
+		codec = avcodec_find_decoder(data->avstream->codec->codec_id);
+		if(!codec) {
+			LOGE(std::string("cannot find decoder for codec ID ")
+				.append(to_string(data->avstream->codec->codec_id)).c_str());
+			return false;
+		}
+
+		data->avcodec = avcodec_alloc_context3(codec);
+		data->avcodec->extradata = data->avstream->codec->extradata;
+		data->avcodec->extradata_size = data->avstream->codec->extradata_size;
+
+		if(avcodec_open2(data->avcodec,codec,NULL) < 0) {
+			LOGE("cannot open codec");
+			return false;
+		}
+
+		// Prepare for decoding
+		av_init_packet(&data->avpacket);
+		data->avpacketoffset = 0;
+
+		data->avframe = av_frame_alloc();
+		break;
 	}
+
+	return true;
 }
 
 void uninit_source(data_t *data) {
 	switch(data->mode) {
 	case MODE_CAMERA:
-		if(data->capture) {
+		if(data->capture)
 			data->capture->release();
-			delete data->capture;
+		break;
+
+	case MODE_FILE:
+		if(data->swscontext) {
+			sws_freeContext(data->swscontext);
+			data->swscontext = NULL;
 		}
+
+		if(data->avpicture.data[0])
+			avpicture_free(&data->avpicture);
+
+		if(data->avframe)
+			av_frame_free(&data->avframe);
+
+		if(data->avpacket.buf)
+			av_free_packet(&data->avpacket);
+
+		if(data->avcodec) {
+			if(avcodec_is_open(data->avcodec))
+				avcodec_close(data->avcodec);
+
+			av_freep(&data->avcodec->extradata);
+			av_freep(&data->avcodec->subtitle_header);
+			av_freep(&data->avcodec);
+		}
+
+		if(data->avformat)
+			avformat_close_input(&data->avformat);
 		break;
 	}
 }
@@ -295,14 +499,21 @@ void *processing_thread(data_t *data) {
 	c_this = data->jenv->GetObjectClass(data->jthis);
 	data->m_blitBitmap = data->jenv->GetMethodID(c_this,"blitBitmap","(IIII)V");
 
-	init_source(data);
+	if(!init_source(data)) {
+		LOGE("cannot init video source");
+		pthread_exit(NULL);
+	}
 
 	data->tracker->run();
 
 	while(true) {
 		clock_gettime(CLOCK_MONOTONIC,&start);
 
-		get_frame(data,input);
+		if(!get_frame(data,input)) {
+			LOGI("no more frames");
+			pthread_exit(NULL);
+		}
+
 		process_frame(data,input,output);
 		draw_frame(data,output);
 
@@ -344,7 +555,7 @@ extern "C" void Java_com_kevinriehm_mobileface_VisualView_spawnWorker(JNIEnv *je
 	jenv->GetJavaVM(&data->jvm);
 	data->jthis = jenv->NewGlobalRef(jthis);
 
-	data->mode = MODE_CAMERA;
+	data->mode = get_int(jenv,jthis,"mode");
 	data->enabled = true;
 
 	data->bitmap = jenv->NewGlobalRef(bitmap);
@@ -355,7 +566,7 @@ extern "C" void Java_com_kevinriehm_mobileface_VisualView_spawnWorker(JNIEnv *je
 	s_classifierpath = (jstring) jenv->GetObjectField(jthis,f_classifierpath);
 
 	classifierpath = jenv->GetStringUTFChars(s_classifierpath,NULL);
-	data->tracker = new cv::DetectionBasedTracker(std::string(classifierpath),trackerParams);
+	data->tracker = std::unique_ptr<cv::DetectionBasedTracker>(new cv::DetectionBasedTracker(std::string(classifierpath),trackerParams));
 	jenv->ReleaseStringUTFChars(s_classifierpath,classifierpath);
 
 	// Load the CI2CV face tracker
@@ -367,10 +578,10 @@ extern "C" void Java_com_kevinriehm_mobileface_VisualView_spawnWorker(JNIEnv *je
 	s_paramspath = (jstring) jenv->GetObjectField(jthis,f_paramspath);
 	paramspath = jenv->GetStringUTFChars(s_paramspath,NULL);
 
-	data->facetracker = FACETRACKER::LoadFaceTracker(modelpath);
+	data->facetracker = std::unique_ptr<FACETRACKER::FaceTracker>(FACETRACKER::LoadFaceTracker(modelpath));
 	if(!data->facetracker) LOGE("cannot load face tracker");
 
-	data->facetrackerparams = FACETRACKER::LoadFaceTrackerParams(paramspath);
+	data->facetrackerparams = std::unique_ptr<FACETRACKER::FaceTrackerParams>(FACETRACKER::LoadFaceTrackerParams(paramspath));
 	if(!data->facetrackerparams) LOGE("cannot load face tracker parameters");
 
 	jenv->ReleaseStringUTFChars(s_paramspath,paramspath);
@@ -384,11 +595,13 @@ extern "C" void Java_com_kevinriehm_mobileface_VisualView_spawnWorker(JNIEnv *je
 	s_avatarpath = (jstring) jenv->GetObjectField(jthis,f_avatarpath);
 	avatarpath = jenv->GetStringUTFChars(s_avatarpath,NULL);
 
-	data->avatar = AVATAR::LoadAvatar(avatarpath);
+	data->avatar = std::unique_ptr<AVATAR::Avatar>(AVATAR::LoadAvatar(avatarpath));
 	if(!data->avatar) LOGE("cannot load avatar");
 	data->avatar->setAvatar(2);
 
 	jenv->ReleaseStringUTFChars(s_avatarpath,avatarpath);
+
+	data->videopath = get_string(jenv,jthis,"videoPath");
 
 	// Store the data
 	set_data(jenv,jthis,data);
@@ -409,10 +622,6 @@ extern "C" void Java_com_kevinriehm_mobileface_VisualView_terminateWorker(JNIEnv
 	pthread_join(data->worker,NULL);
 
 	// Clean up data
-	if(data->facetrackerparams) delete data->facetrackerparams;
-	if(data->facetracker) delete data->facetracker;
-	if(data->tracker) delete data->tracker;
-
 	jenv->DeleteGlobalRef(data->bitmap);
 	jenv->DeleteGlobalRef(data->jthis);
 
@@ -427,6 +636,7 @@ extern "C" void Java_com_kevinriehm_mobileface_VisualView_resetTracking(JNIEnv *
 	if(data = get_data(jenv,jthis)) {
 		LOGI("resetting face tracking");
 		data->facetracker->Reset();
+		data->calibrated = false;
 	}
 }
 

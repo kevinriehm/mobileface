@@ -25,17 +25,21 @@ import org.opencv.core.Mat;
 public class VisualView extends SurfaceView implements SurfaceHolder.Callback {
 	private static final String TAG = "MobileFace-VisualView";
 
-	public final int MODE_CAMERA = 0;
+	public static final int MODE_CAMERA = 0;
+	public static final int MODE_FILE   = 1;
 
 	private int mode;
 
 	private boolean enabled;
 	private boolean shouldEnable;
 
-	public String classifierPath;
-	public String modelPath;
-	public String paramsPath;
-	public String avatarPath;
+	private String classifierPath;
+
+	private String modelPath;
+	private String paramsPath;
+	private String avatarPath;
+
+	private String videoPath;
 
 	private Bitmap bitmap;
 	private Matrix matrix;
@@ -47,6 +51,10 @@ public class VisualView extends SurfaceView implements SurfaceHolder.Callback {
 	static {
 		System.loadLibrary("gnustl_shared");
 		System.loadLibrary("opencv_java");
+		System.loadLibrary("avutil");
+		System.loadLibrary("avcodec");
+		System.loadLibrary("avformat");
+		System.loadLibrary("swscale");
 		System.loadLibrary("mobileface");
 	}
 
@@ -101,6 +109,10 @@ public class VisualView extends SurfaceView implements SurfaceHolder.Callback {
 
 	public void setAvatarPath(String path) {
 		avatarPath = path;
+	}
+
+	public void setVideoPath(String path) {
+		videoPath = path;
 	}
 
 	public native void setViewOrientation(int orientation);

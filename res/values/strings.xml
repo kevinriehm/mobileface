@@ -3,6 +3,7 @@
 	<string name="app_name">Tweet A Face</string>
 
 	<string name="deauth_button">Logout</string>
+	<string name="open_video_button">Open Video</string>
 	<string name="reset_tracking_button">Reset Tracking</string>
 	<string name="calibrate_button">Calibrate Expression</string>
 

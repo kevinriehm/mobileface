@@ -16,10 +16,20 @@
 		android:onClick="deauthenticate" />
 
 	<Button
+		android:id="@+id/open_video"
+		android:layout_width="wrap_content"
+		android:layout_height="wrap_content"
+		android:layout_alignParentRight="true"
+		android:alpha="0.5"
+		android:text="@string/open_video_button"
+		android:onClick="openVideo" />
+
+	<Button
 		android:id="@+id/reset_tracking"
 		android:layout_width="wrap_content"
 		android:layout_height="wrap_content"
 		android:layout_alignParentRight="true"
+		android:layout_below="@+id/open_video"
 		android:alpha="0.5"
 		android:text="@string/reset_tracking_button"
 		android:onClick="resetTracking" />

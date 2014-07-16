@@ -83,6 +83,24 @@ LOCAL_SHARED_LIBRARIES := avcodec avutil
 
 include $(BUILD_SHARED_LIBRARY)
 
+# FFmpeg - libswscale
+include $(CLEAR_VARS)
+
+LOCAL_MODULE := swscale
+
+LOCAL_CFLAGS     := $(FFMPEG_CFLAGS)
+LOCAL_C_INCLUDES := $(FFMPEG_INCLUDES)
+
+SWSCALE_SRC_FILES := $(wildcard jni/ffmpeg/libswscale/*.c)
+SWSCALE_EXCLUDE   := $(wildcard jni/ffmpeg/libswscale/*_template.c jni/ffmpeg/libswscale/*-test.c)
+
+SWSCALE_SRC_FILES := $(filter-out $(SWSCALE_EXCLUDE),$(SWSCALE_SRC_FILES))
+LOCAL_SRC_FILES   := $(SWSCALE_SRC_FILES:jni/%=%)
+
+LOCAL_SHARED_LIBRARIES := avutil
+
+include $(BUILD_SHARED_LIBRARY)
+
 # Main image processing code
 include $(CLEAR_VARS)
 
@@ -91,13 +109,13 @@ include $(OPENCV_SDK)/native/jni/OpenCV.mk
 
 LOCAL_MODULE := mobileface
 
-LOCAL_CFLAGS     += -Wall -Wno-parentheses -Werror
-LOCAL_C_INCLUDES += $(LOCAL_PATH)/ci2cv
+LOCAL_CFLAGS     += --std=c++11 -Wall -Wno-parentheses -Werror
+LOCAL_C_INCLUDES += $(LOCAL_PATH)/ci2cv $(LOCAL_PATH)/ffmpeg $(LOCAL_PATH)/include/ffmpeg
 LOCAL_LDLIBS     += -ljnigraphics -llog
 
 LOCAL_SRC_FILES := visual_view.cpp
 
-LOCAL_SHARED_LIBRARIES := avcodec avformat
+LOCAL_SHARED_LIBRARIES := avcodec avformat avutil swscale
 LOCAL_STATIC_LIBRARIES := ci2cv
 
 include $(BUILD_SHARED_LIBRARY)
