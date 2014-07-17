@@ -1,3 +1,7 @@
 [submodule "jni/ffmpeg"]
 	path = jni/ffmpeg
 	url = git://source.ffmpeg.org/ffmpeg.git
+[submodule "jni/jsoncons"]
+	path = jni/jsoncons
+	url = https://github.com/danielaparker/jsoncons
+	branch = 0.93
