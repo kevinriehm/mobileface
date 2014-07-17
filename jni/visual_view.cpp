@@ -163,8 +163,7 @@ bool get_frame(data_t *data, cv::Mat &frame) {
 				data->avpacketoffset = 0;
 
 				do {
-					if(data->avpacket.buf)
-						av_free_packet(&data->avpacket);
+					av_free_packet(&data->avpacket);
 
 					if(av_read_frame(data->avformat,&data->avpacket) < 0)
 						return false; // EOF
@@ -448,14 +447,13 @@ void uninit_source(data_t *data) {
 		if(data->avframe)
 			av_frame_free(&data->avframe);
 
-		if(data->avpacket.buf)
+		if(data->avpacket.data)
 			av_free_packet(&data->avpacket);
 
 		if(data->avcodec) {
 			if(avcodec_is_open(data->avcodec))
 				avcodec_close(data->avcodec);
 
-			av_freep(&data->avcodec->extradata);
 			av_freep(&data->avcodec->subtitle_header);
 			av_freep(&data->avcodec);
 		}
@@ -466,6 +464,18 @@ void uninit_source(data_t *data) {
 	}
 }
 
+void set_up_sigactions() {
+	struct sigaction sa;
+
+	// Handle the friendly termination signal
+	sigemptyset(&sa.sa_mask);
+	sa.sa_flags = 0;
+	sa.sa_handler = [](int signum) {
+		pthread_exit(NULL);
+	};
+	sigaction(SIGINT,&sa,NULL);
+}
+
 void cleanup_processing_thread(data_t *data) {
 	uninit_source(data);
 
@@ -474,23 +484,15 @@ void cleanup_processing_thread(data_t *data) {
 	data->jvm->DetachCurrentThread();
 }
 
-void exit_processing_thread(int signum) {
-	pthread_exit(NULL);
-}
-
 void *processing_thread(data_t *data) {
 	jclass c_this;
 	double duration;
-	struct sigaction sa;
 	cv::Mat input, output;
 	struct timespec start, end;
 
 	pthread_cleanup_push((void (*)(void *)) cleanup_processing_thread,(void *) data);
 
-	sigemptyset(&sa.sa_mask);
-	sa.sa_flags = 0;
-	sa.sa_handler = exit_processing_thread;
-	sigaction(SIGINT,&sa,NULL);
+	set_up_sigactions();
 
 	data->jvm->AttachCurrentThread(&data->jenv,NULL);
 
