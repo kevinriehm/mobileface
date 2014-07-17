@@ -12,9 +12,14 @@ Build Procedure
 
  1. Ensure that the Android SDK and NDK binaries are properly included in PATH.
 
+ 2. Checkout the project sub-modules:
+
+        git submodule init
+        git submodule update
+
  2. Generate a `local.properties` file with
 
-	android update project --path <path to project directory>
+        android update project --path <path to project directory>
 
  3. Link or copy `twitter4j-core-<version>.jar`,
     `twitter4j-media-support-<version>.jar`, and the entire OpenCV4Android
@@ -24,22 +29,22 @@ Build Procedure
     included to apply a simple XOR obfuscation sceme to them. From the
     project's directory, run
 
-	./obfuscate_twitter_keys.pl <Twitter Consumer Key> <Twitter Consumer Secret>
+        ./obfuscate_twitter_keys.pl <Twitter Consumer Key> <Twitter Consumer Secret>
 
  5. From the project directory, build the native portion of the code:
 
-	ndk-build
+        ndk-build
 
  6. For an debug build, from the project directory simply run
 
-	ant debug
+        ant debug
 
     The result will be `bin/MobileFace-debug.apk`. For a signed, release build
     see [the Android developer documentation][release-docs].
 
  7. The apk can be installed to a connected device or emulator with adb:
 
-	adb install -r bin/MobileFace-debug.apk
+        adb install -r bin/MobileFace-debug.apk
 
 [release-docs]: https://developer.android.com/tools/building/building-cmdline.html#ReleaseMode
 
