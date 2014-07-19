@@ -1,6 +1,7 @@
 #include <cstdint>
 #include <ctime>
 #include <fstream>
+#include <iostream>
 #include <memory>
 #include <streambuf>
 #include <string>
@@ -13,6 +14,9 @@
 #include <android/log.h>
 
 #include <jni.h>
+
+#define _GLIBCXX_USE_NOEXCEPT noexcept
+#include <jsoncons/json.hpp>
 
 #include <opencv2/opencv.hpp>
 #include <opencv2/contrib/detection_based_tracker.hpp>
@@ -60,6 +64,10 @@ struct data_t {
 	std::unique_ptr<cv::DetectionBasedTracker> tracker;
 
 	std::string videopath;
+
+	jsoncons::json expressions;
+
+	int framecount;
 
 	AVFormatContext *avformat;
 	AVStream *avstream;
@@ -184,6 +192,8 @@ bool get_frame(data_t *data, cv::Mat &frame) {
 			data->avpacketoffset += nbytes;
 		} while(!gotframe);
 
+		data->framecount++;
+
 		// Make sure we have a destination
 		if(!data->avpicture.data[0])
 			avpicture_alloc(&data->avpicture,PIX_FMT_BGR24,data->avframe->width,data->avframe->height);
@@ -227,6 +237,7 @@ void process_frame(data_t *data, cv::Mat &input, cv::Mat &output) {
 	cv::Size facesize, outsize;
 	std::vector<cv::Rect> faces;
 	FACETRACKER::PointVector faceshape;
+	std::vector<cv::Point3_<double> > faceshape3d;
 
 	output = cv::Mat(input.size(),CV_8UC4);
 
@@ -290,11 +301,16 @@ void process_frame(data_t *data, cv::Mat &input, cv::Mat &output) {
 
 	// Hand it off to the CI2CV SDK
 	if(data->facetracker) {
+		jsoncons::json expression;
+		expression["frame"] = data->framecount;
+		expression["has_face"] = false;
+
 		data->facestrength = data->facetracker->NewFrame(data->orientedgray,data->facetrackerparams.get());
 
 		// Outline and draw the avatar if the tracking quality is good enough
 		if(data->facestrength >= MIN_FACE_STRENGTH) {
 			faceshape = data->facetracker->getShape();
+			faceshape3d = data->facetracker->get3DShape();
 
 			if(!data->calibrated) {
 				data->avatar->Initialise(data->orientedframe,faceshape);
@@ -305,6 +321,26 @@ void process_frame(data_t *data, cv::Mat &input, cv::Mat &output) {
 				cv::circle(data->orientedframe,faceshape[i],1,cv::Scalar(0,0,0xFF));
 
 			data->avatar->Animate(data->orientedframe,data->orientedframe,faceshape);
+
+			// If this is a video, save this frame's expression
+			if(data->mode == MODE_FILE) {
+				expression["has_face"] = true;
+
+				jsoncons::json points(jsoncons::json::an_array);
+				for(unsigned int i = 0; i < faceshape3d.size(); i++) {
+					jsoncons::json point(jsoncons::json::an_array);
+					point.add(faceshape3d[i].x);
+					point.add(faceshape3d[i].y);
+					point.add(faceshape3d[i].z);
+					points.add(std::move(point));
+				}
+				expression["points"] = std::move(points);
+			}
+		}
+
+		// Have an entry for every frame
+		if(data->mode == MODE_FILE) {
+			data->expressions["frames"].add(std::move(expression));
 		}
 	}
 
@@ -369,6 +405,11 @@ bool init_source(data_t *data) {
 		break;
 
 	case MODE_FILE:
+		// Prepare to record the facial expressions
+		data->expressions["frames"] = std::move(jsoncons::json(jsoncons::json::an_array));
+
+		data->framecount = 0;
+
 		av_register_all();
 
 		// Open the video file
@@ -429,6 +470,8 @@ bool init_source(data_t *data) {
 }
 
 void uninit_source(data_t *data) {
+	std::string expressionfile;
+
 	switch(data->mode) {
 	case MODE_CAMERA:
 		if(data->capture)
@@ -436,6 +479,12 @@ void uninit_source(data_t *data) {
 		break;
 
 	case MODE_FILE:
+		// Save the expression data
+		expressionfile = std::string(data->videopath.data(),data->videopath.find_last_of('.')).append(".expression.json");
+		LOGI(std::string("Expression file: ").append(expressionfile).c_str());
+		std::ofstream(expressionfile) << pretty_print(data->expressions) << std::endl;
+
+		// Free everything in data
 		if(data->swscontext) {
 			sws_freeContext(data->swscontext);
 			data->swscontext = NULL;
