@@ -48,8 +48,9 @@ import org.opencv.android.OpenCVLoader;
 public class MainActivity extends Activity {
 	private static final String TAG = "MobileFace-MainActivity";
 
-	private static final int REQUEST_TWITTER_AUTH = 0;
-	private static final int REQUEST_VIDEO_FILE   = 1;
+	private static final int REQUEST_TWITTER_AUTH    = 0;
+	private static final int REQUEST_VIDEO_FILE      = 1;
+	private static final int REQUEST_EXPRESSION_FILE = 2;
 
 	private VisualView visualView;
 
@@ -103,19 +104,7 @@ public class MainActivity extends Activity {
 
 			case REQUEST_VIDEO_FILE:
 				if(resultCode == RESULT_OK) {
-					String path;
-
-					Uri uri = data.getData();
-					if(uri.getScheme().equals("content")) {
-						Cursor cursor = getContentResolver().query(uri,new String[] {MediaStore.MediaColumns.DATA},null,null,null);
-						cursor.moveToFirst();
-						path = cursor.getString(0);
-					} else if(uri.getScheme().equals("file"))
-						path = uri.getPath();
-					else {
-						Log.e(TAG,"unknown URI scheme: " + uri.getScheme());
-						break;
-					}
+					String path = getFilePath(data.getData());
 
 					Log.i(TAG,"Video file path: " + path);
 
@@ -124,6 +113,24 @@ public class MainActivity extends Activity {
 					visualView.setMode(VisualView.MODE_FILE);
 					visualView.disable();
 					visualView.enable();
+				}
+				break;
+
+			case REQUEST_EXPRESSION_FILE:
+				if(resultCode == RESULT_OK) {
+					String path = getFilePath(data.getData());
+
+					Log.i(TAG,"Expression file path: " + path);
+
+					// Abort if this isn't an expression file
+					if(!path.endsWith(".expression.json")) {
+						Toast.makeText(this,R.string.not_expression_file,Toast.LENGTH_SHORT);
+						break;
+					}
+
+					Intent intent = new Intent(this,ExpressionViewActivity.class);
+					intent.setData(Uri.parse("file://" + path));
+					startActivity(intent);
 				}
 				break;
 
@@ -227,7 +234,6 @@ public class MainActivity extends Activity {
 
 	public void openVideo(View view) {
 		Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
-		intent.addCategory(Intent.CATEGORY_OPENABLE);
 		intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
 		intent.setType("video/*");
 
@@ -241,6 +247,15 @@ public class MainActivity extends Activity {
 
 	public void calibrateExpression(View view) {
 		visualView.calibrateExpression();
+	}
+
+	public void viewExpression(View view) {
+		Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
+		intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+		intent.setType("*/*");
+
+		Intent chooser = Intent.createChooser(intent,"Open an Expression JSON File");
+		startActivityForResult(chooser,REQUEST_EXPRESSION_FILE);
 	}
 
 	// Helper classes/functions
@@ -288,6 +303,21 @@ public class MainActivity extends Activity {
 		}
 
 		return data;
+	}
+
+	// Get the actual file name for uri
+	private String getFilePath(Uri uri) {
+		String path = null;
+
+		if(uri.getScheme().equals("content")) {
+			Cursor cursor = getContentResolver().query(uri,new String[] {MediaStore.MediaColumns.DATA},null,null,null);
+			cursor.moveToFirst();
+			path = cursor.getString(0);
+		} else if(uri.getScheme().equals("file"))
+			path = uri.getPath();
+		else Log.e(TAG,"unknown URI scheme: " + uri.getScheme());
+
+		return path;
 	}
 
 	private class GetTwitterCredentialsTask extends AsyncTask<Void, Void, Void> {

@@ -34,12 +34,21 @@
 		android:onClick="resetTracking" />
 
 	<Button
+		android:id="@+id/calibrate"
 		android:layout_width="wrap_content"
 		android:layout_height="wrap_content"
 		android:layout_above="@+id/reset_tracking"
 		android:alpha="0.5"
 		android:text="@string/calibrate_button"
 		android:onClick="calibrateExpression" />
+
+	<Button
+		android:layout_width="wrap_content"
+		android:layout_height="wrap_content"
+		android:layout_above="@+id/calibrate"
+		android:alpha="0.5"
+		android:text="@string/view_expression_button"
+		android:onClick="viewExpression" />
 
 	<ImageButton
 		android:layout_width="wrap_content"

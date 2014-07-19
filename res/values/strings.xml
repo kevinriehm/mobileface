@@ -1,11 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 	<string name="app_name">Tweet A Face</string>
+	<string name="expression_view_activity">Expression View</string>
 
 	<string name="deauth_button">Logout</string>
 	<string name="open_video_button">Open Video</string>
 	<string name="reset_tracking_button">Reset Tracking</string>
 	<string name="calibrate_button">Calibrate Expression</string>
+	<string name="view_expression_button">View Expression File</string>
 
 	<string name="deauthed_message">This app has logged out from your Twitter account.</string>
 
@@ -18,6 +20,8 @@
 	<string name="no_faces_title">Can\'t find a face!</string>
 	<string name="no_faces_message">Please look directly at the camera, and make sure your face is circled in red.</string>
 	<string name="no_faces_button">OK</string>
+
+	<string name="not_expression_file">The selected file was not an expression file.</string>
 
 	<string name="tweet_preview_title">Tweet A Face</string>
 	<string name="tweet_preview_positive">Tweet</string>
