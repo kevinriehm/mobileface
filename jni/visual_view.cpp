@@ -60,14 +60,14 @@ struct data_t {
 	cv::Mat orientedframe;
 	cv::Mat orientedgray;
 
+	int framecount;
+
 	std::unique_ptr<cv::VideoCapture> capture;
 	std::unique_ptr<cv::DetectionBasedTracker> tracker;
 
 	std::string videopath;
 
 	jsoncons::json expressions;
-
-	int framecount;
 
 	AVFormatContext *avformat;
 	AVStream *avstream;
@@ -192,8 +192,6 @@ bool get_frame(data_t *data, cv::Mat &frame) {
 			data->avpacketoffset += nbytes;
 		} while(!gotframe);
 
-		data->framecount++;
-
 		// Make sure we have a destination
 		if(!data->avpicture.data[0])
 			avpicture_alloc(&data->avpicture,PIX_FMT_BGR24,data->avframe->width,data->avframe->height);
@@ -210,6 +208,8 @@ bool get_frame(data_t *data, cv::Mat &frame) {
 			data->avpicture.linesize[0]);
 		break;
 	}
+
+	data->framecount++;
 
 	return true;
 }
@@ -326,15 +326,25 @@ void process_frame(data_t *data, cv::Mat &input, cv::Mat &output) {
 			if(data->mode == MODE_FILE) {
 				expression["has_face"] = true;
 
-				jsoncons::json points(jsoncons::json::an_array);
+				jsoncons::json points2d(jsoncons::json::an_array);
+				jsoncons::json points3d(jsoncons::json::an_array);
+
 				for(unsigned int i = 0; i < faceshape3d.size(); i++) {
-					jsoncons::json point(jsoncons::json::an_array);
-					point.add(faceshape3d[i].x);
-					point.add(faceshape3d[i].y);
-					point.add(faceshape3d[i].z);
-					points.add(std::move(point));
+					jsoncons::json point2d(jsoncons::json::an_array);
+					jsoncons::json point3d(jsoncons::json::an_array);
+
+					point2d.add(faceshape[i].x);
+					point2d.add(faceshape[i].y);
+					points2d.add(std::move(point2d));
+
+					point3d.add(faceshape3d[i].x);
+					point3d.add(faceshape3d[i].y);
+					point3d.add(faceshape3d[i].z);
+					points3d.add(std::move(point3d));
 				}
-				expression["points"] = std::move(points);
+
+				expression["points2d"] = std::move(points2d);
+				expression["points3d"] = std::move(points3d);
 			}
 		}
 
@@ -408,8 +418,6 @@ bool init_source(data_t *data) {
 		// Prepare to record the facial expressions
 		data->expressions["frames"] = std::move(jsoncons::json(jsoncons::json::an_array));
 
-		data->framecount = 0;
-
 		av_register_all();
 
 		// Open the video file
@@ -458,6 +466,9 @@ bool init_source(data_t *data) {
 			return false;
 		}
 
+		// Save some information about this file
+		data->expressions["fps"] = av_q2d(data->avstream->avg_frame_rate);
+
 		// Prepare for decoding
 		av_init_packet(&data->avpacket);
 		data->avpacketoffset = 0;
@@ -465,6 +476,8 @@ bool init_source(data_t *data) {
 		data->avframe = av_frame_alloc();
 		break;
 	}
+
+	data->framecount = 0;
 
 	return true;
 }
@@ -557,7 +570,7 @@ void *processing_thread(data_t *data) {
 
 	data->tracker->run();
 
-	while(true) {
+	while(data->enabled) {
 		clock_gettime(CLOCK_MONOTONIC,&start);
 
 		if(!get_frame(data,input)) {
