@@ -469,6 +469,9 @@ bool init_source(data_t *data) {
 		}
 
 		// Save some information about this file
+		data->expressions["source"] = data->videopath;
+		data->expressions["frame_width"] = data->avcodec->width;
+		data->expressions["frame_height"] = data->avcodec->height;
 		data->expressions["fps"] = av_q2d(data->avstream->avg_frame_rate);
 
 		// Prepare for decoding
