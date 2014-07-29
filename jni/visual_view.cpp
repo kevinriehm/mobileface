@@ -60,6 +60,8 @@ struct data_t {
 	cv::Mat orientedframe;
 	cv::Mat orientedgray;
 
+	bool sourceinited;
+
 	int framecount;
 
 	std::unique_ptr<cv::VideoCapture> capture;
@@ -479,11 +481,16 @@ bool init_source(data_t *data) {
 
 	data->framecount = 0;
 
+	data->sourceinited = true;
+
 	return true;
 }
 
 void uninit_source(data_t *data) {
 	std::string expressionfile;
+
+	if(!data->sourceinited)
+		return;
 
 	switch(data->mode) {
 	case MODE_CAMERA:
@@ -524,6 +531,8 @@ void uninit_source(data_t *data) {
 			avformat_close_input(&data->avformat);
 		break;
 	}
+
+	data->sourceinited = false;
 }
 
 void set_up_sigactions() {
