@@ -109,11 +109,11 @@ include $(OPENCV_SDK)/native/jni/OpenCV.mk
 
 LOCAL_MODULE := mobileface
 
-LOCAL_CFLAGS     += --std=c++11 -D__STDC_CONSTANT_MACROS -Wall -Wno-parentheses -Werror
+LOCAL_CFLAGS     += --std=c++11 -D__STDC_CONSTANT_MACROS -Wall -Wno-parentheses -Wno-unused-variable -Werror
 LOCAL_C_INCLUDES += $(LOCAL_PATH)/ci2cv $(LOCAL_PATH)/ffmpeg $(LOCAL_PATH)/include/ffmpeg $(LOCAL_PATH)/jsoncons/src
 LOCAL_LDLIBS     += -ljnigraphics -llog
 
-LOCAL_SRC_FILES := visual_view.cpp
+LOCAL_SRC_FILES := expression_view.cpp visual_view.cpp
 
 LOCAL_SHARED_LIBRARIES := avcodec avformat avutil swscale
 LOCAL_STATIC_LIBRARIES := ci2cv

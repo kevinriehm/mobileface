@@ -19,7 +19,6 @@
 #include <jsoncons/json.hpp>
 
 #include <opencv2/opencv.hpp>
-#include <opencv2/contrib/detection_based_tracker.hpp>
 
 #include <avatar/Avatar.hpp>
 #include <tracker/FaceTracker.hpp>
@@ -65,7 +64,6 @@ struct data_t {
 	int framecount;
 
 	std::unique_ptr<cv::VideoCapture> capture;
-	std::unique_ptr<cv::DetectionBasedTracker> tracker;
 
 	std::string videopath;
 
@@ -286,20 +284,6 @@ void process_frame(data_t *data, cv::Mat &input, cv::Mat &output) {
 
 	// Get a grayscale version
 	cv::cvtColor(data->orientedframe,data->orientedgray,CV_BGR2GRAY);
-
-	// Look for faces
-	data->tracker->process(data->orientedgray);
-	data->tracker->getObjects(faces);
-
-	// Get the biggest detected object
-	data->face = cv::Rect();
-	for(unsigned int i = 0; i < faces.size(); i++)
-		if(faces[i].width*faces[i].height > data->face.width*data->face.height)
-			data->face = faces[i];
-
-	// Indicate it with a rectangle
-	if(data->face.width > 0)
-		cv::rectangle(data->orientedframe,data->face,cv::Scalar(0,0xFF,0),2);
 
 	// Hand it off to the CI2CV SDK
 	if(data->facetracker) {
@@ -580,8 +564,6 @@ void *processing_thread(data_t *data) {
 		pthread_exit(NULL);
 	}
 
-	data->tracker->run();
-
 	while(data->enabled) {
 		clock_gettime(CLOCK_MONOTONIC,&start);
 
@@ -616,10 +598,9 @@ extern "C" void Java_com_kevinriehm_mobileface_VisualView_setViewOrientation(JNI
 extern "C" void Java_com_kevinriehm_mobileface_VisualView_spawnWorker(JNIEnv *jenv, jobject jthis, jint mode, jobject bitmap) {
 	data_t *data;
 	jclass c_this;
-	DetectionBasedTracker::Parameters trackerParams;
-	const char *avatarpath, *classifierpath, *modelpath, *paramspath;
-	jstring s_avatarpath, s_classifierpath, s_modelpath, s_paramspath;
-	jfieldID f_avatarpath, f_classifierpath, f_modelpath, f_paramspath;
+	jstring s_avatarpath, s_modelpath, s_paramspath;
+	const char *avatarpath, *modelpath, *paramspath;
+	jfieldID f_avatarpath, f_modelpath, f_paramspath;
 
 	// Is the worker already running?
 	if(data = get_data(jenv,jthis)) return;
@@ -636,14 +617,6 @@ extern "C" void Java_com_kevinriehm_mobileface_VisualView_spawnWorker(JNIEnv *je
 
 	data->bitmap = jenv->NewGlobalRef(bitmap);
 	data->orientation = 0;
-
-	// Load the face classifier
-	f_classifierpath = jenv->GetFieldID(c_this,"classifierPath","Ljava/lang/String;");
-	s_classifierpath = (jstring) jenv->GetObjectField(jthis,f_classifierpath);
-
-	classifierpath = jenv->GetStringUTFChars(s_classifierpath,NULL);
-	data->tracker = std::unique_ptr<cv::DetectionBasedTracker>(new cv::DetectionBasedTracker(std::string(classifierpath),trackerParams));
-	jenv->ReleaseStringUTFChars(s_classifierpath,classifierpath);
 
 	// Load the CI2CV face tracker
 	f_modelpath = jenv->GetFieldID(c_this,"modelPath","Ljava/lang/String;");
@@ -677,6 +650,7 @@ extern "C" void Java_com_kevinriehm_mobileface_VisualView_spawnWorker(JNIEnv *je
 
 	jenv->ReleaseStringUTFChars(s_avatarpath,avatarpath);
 
+	// Miscellaneous info
 	data->videopath = get_string(jenv,jthis,"videoPath");
 
 	// Store the data

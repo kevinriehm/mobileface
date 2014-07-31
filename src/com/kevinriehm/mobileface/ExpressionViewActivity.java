@@ -8,6 +8,10 @@ public class ExpressionViewActivity extends Activity {
 		super.onCreate(savedInstanceState);
 
 		setContentView(R.layout.expression_view);
+
+		ExpressionView view = (ExpressionView) findViewById(R.id.expression_surface);
+		view.setExpressionFilePath(getIntent().getData().getPath());
+		view.setAvatarFilePath(getIntent().getStringExtra("com.kevinriehm.mobileface.AvatarPath"));
 	}
 }
 

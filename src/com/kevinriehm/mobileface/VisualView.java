@@ -33,8 +33,6 @@ public class VisualView extends SurfaceView implements SurfaceHolder.Callback {
 	private boolean enabled;
 	private boolean shouldEnable;
 
-	private String classifierPath;
-
 	private String modelPath;
 	private String paramsPath;
 	private String avatarPath;
@@ -95,10 +93,6 @@ public class VisualView extends SurfaceView implements SurfaceHolder.Callback {
 		mode = _mode;
 	}
 
-	public void setClassifierPath(String path) {
-		classifierPath = path;
-	}
-
 	public void setModelPath(String path) {
 		modelPath = path;
 	}
@@ -144,6 +138,8 @@ public class VisualView extends SurfaceView implements SurfaceHolder.Callback {
 
 	public void disable() {
 		Log.i(TAG,"disable()");
+
+		if(!enabled) return;
 
 		terminateWorker();
 

@@ -68,13 +68,14 @@ public class MainActivity extends Activity {
 	private String twitterToken = null;
 	private String twitterSecret = null;
 
+	private boolean leavingActivity;
+
 	public void onCreate(Bundle savedInstanceState) {
 		super.onCreate(savedInstanceState);
 
 		setContentView(R.layout.main);
 
 		// Export some resources to actual files
-		faceFilePath = copyResourceToFile(R.raw.lbpcascade_frontalface,"lbpcascade_frontalface.xml").getAbsolutePath();
 		faceModelPath = copyResourceToFile(R.raw.face_mytracker_binary,"face.mytracker.binary").getAbsolutePath();
 		faceParamsPath = copyResourceToFile(R.raw.face_mytrackerparams_binary,"face.mytrackerparams.binary").getAbsolutePath();
 		avatarPath = copyResourceToFile(R.raw.ci2cv_avatar_binary,"ci2cv.avatar.binary").getAbsolutePath();
@@ -85,6 +86,9 @@ public class MainActivity extends Activity {
 		// Un-obfuscate the Twitter credentials
 		twitterConsumerKey = getObfuscatedData(R.raw.twitter_consumer_key);
 		twitterConsumerSecret = getObfuscatedData(R.raw.twitter_consumer_secret);
+
+		// We're not going anywhere, yet
+		leavingActivity = false;
 	}
 
 	public void onPause() {
@@ -130,7 +134,10 @@ public class MainActivity extends Activity {
 
 					Intent intent = new Intent(this,ExpressionViewActivity.class);
 					intent.setData(Uri.parse("file://" + path));
+					intent.putExtra("com.kevinriehm.mobileface.AvatarPath",avatarPath);
 					startActivity(intent);
+
+					leavingActivity = true;
 				}
 				break;
 
@@ -141,6 +148,12 @@ public class MainActivity extends Activity {
 	public void onResume() {
 		super.onResume();
 
+		// Don't do anything if we're just going to leave right immediately
+		if(leavingActivity) {
+			leavingActivity = false;
+			return;
+		}
+
 		// Make sure we have access to Twitter
 		checkTwitterCredentials();
 
@@ -148,7 +161,6 @@ public class MainActivity extends Activity {
 			public void onManagerConnected(int status) {
 				if(status == LoaderCallbackInterface.SUCCESS) {
 					// Activate the camera processing
-					visualView.setClassifierPath(faceFilePath);
 					visualView.setModelPath(faceModelPath);
 					visualView.setParamsPath(faceParamsPath);
 					visualView.setAvatarPath(avatarPath);
